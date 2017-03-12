@@ -51,7 +51,7 @@ void Carnival_network::connectWifi(){
   debug.MsgPart("Attempting to connect to SSID: ");
   debug.Msg(ssid);
 
-  while ( status != WL_CONNECTED) {
+  if ( WiFi.status() != WL_CONNECTED) {
         // Connect to WPA/WPA2 network. Change this line if using open or WEP network:
         status = WiFi.begin(ssid, pass);
         // flash and wait 10 seconds for connection:
@@ -59,7 +59,6 @@ void Carnival_network::connectWifi(){
     }
     if (DEBUG) {
        if (status==WL_CONNECTED) { printWifiStatus(); }
-       else { debug.Msg("Not Connected...."); }
     }
 }
 
