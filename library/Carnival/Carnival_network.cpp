@@ -18,6 +18,13 @@
 #include      <Carnival_leds.h>
 
 
+extern "C" {
+#include "gpio.h"
+}
+extern "C" {
+#include "user_interface.h"
+}
+
 #define       REDLED        0        // what pin?
 #define       BLUELED       2        // what pin?
 const boolean ON            = LOW;     // LED ON
@@ -27,7 +34,7 @@ const boolean OFF           = HIGH;    // LED OFF
 WiFiClient  client;
 int         status          = WL_IDLE_STATUS;
 String      WHO             = "";
-boolean     DEBUG           = 0;
+boolean     DEBUG           = 1;
 
 extern Carnival_debug debug;
 extern Carnival_leds leds;
@@ -52,10 +59,12 @@ void Carnival_network::connectWifi(){
   debug.Msg(ssid);
 
   if ( WiFi.status() != WL_CONNECTED) {
-        // Connect to WPA/WPA2 network. Change this line if using open or WEP network:
-        status = WiFi.begin(ssid, pass);
+
+// This may be required for lower power consumption.  unconfirmed.
+        WiFi.mode(WIFI_STA);
+        status = WiFi.begin(ssid, pass);  // connect to network
         // flash and wait 10 seconds for connection:
-        leds.flashLED(BLUELED, 10, 166, false); // flash slowly(blocking) to show attempt, create delay
+        leds.flashLED(BLUELED, 10, 166, false); // flash slowly (non-blocking) to show attempt
     }
     if (DEBUG) {
        if (status==WL_CONNECTED) { printWifiStatus(); }
@@ -68,13 +77,14 @@ int Carnival_network::reconnect(bool output) {
     // wait for a new client:
     // Attempt a connection with base unit
     if (output) { debug.Msg("Confirming connection..."); }
+
     int con=0;
     // check "connected() less frequently
     if (!client || (output && !client.connected())) {
         con = client.connect(HOST,PORT);
         if (con) {
           leds.setLED(BLUELED,1);
-          // re-announce we we are to the server
+          // re-announce who we are to the server
           // clean out the input buffer:
           client.flush();
           client.println(WHO); // Tell server which game
@@ -82,6 +92,8 @@ int Carnival_network::reconnect(bool output) {
             debug.MsgPart(WHO);
             debug.Msg(": ONLINE");
           }
+       } else {
+         debug.Msg("couldn't connect to host:port");
        }
     } else { con =1; }
     if (!con) {
@@ -145,3 +157,25 @@ void Carnival_network::callServer(int message, int optdata){
     leds.blinkBlue(3, 10, 1); // show communication
     
 }
+
+
+void callback() {
+    debug.Msg("Woke up from sleep");
+}
+
+void Carnival_network::sleepNow(int wakeButton) {
+  pinMode(wakeButton, INPUT_PULLUP);
+  debug.Msg("going to light sleep...");
+  leds.setLED(BLUELED,0);
+  delay(100);
+  wifi_set_opmode(NULL_MODE);
+  wifi_fpm_set_sleep_type(LIGHT_SLEEP_T); //light sleep mode
+  gpio_pin_wakeup_enable(GPIO_ID_PIN(wakeButton), GPIO_PIN_INTR_LOLEVEL); //set the interrupt to look for LOW pulses on pin. 
+  wifi_fpm_open();
+  wifi_fpm_set_wakeup_cb(callback); //wakeup callback
+  wifi_fpm_do_sleep(0xFFFFFFF); 
+  delay(100); 
+  connectWifi();
+  reconnect(1);
+}
+

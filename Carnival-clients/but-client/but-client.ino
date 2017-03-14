@@ -47,8 +47,13 @@
     
 */
 
+
 #define       DEBUG         1       // 1 to print useful messages to the serial port
 #define       serialSpeed   115200  // As appropriate
+
+extern "C" {
+#include "gpio.h"
+}
 
 #include      <Carnival_debug.h>
 #include      <Carnival_network.h>
@@ -57,30 +62,50 @@
 
 //------------ WHICH GAME, WHAT MODE, HOW HOOKED UP
 
-#define       WHOAMI                 "B"  // which device am I?
-#define       butCount                3   // number of buttons connected
-int           allButtons[butCount]    = {4,5,12};  // What pins are connected to buttons
-int           butspushed[butCount];
-#define       ON                      LOW
+
+#define        WHOAMI                 "B"           // which device am I?
+#define        butCount                1            // number of buttons connected
+int            allButtons[butCount]    = {0};       // What pins are connected to button(s)
+int            butspushed[butCount];
+#define        ON                      LOW
+int            looksgood               = 0;
+
+
+      int      sleep                   = 1;         // 1 - go to sleep if unused for a time, 0, always on
+const int      shake                   = 1;         // detect shaking / has shake sensor / send shake message
+
+
+
+
+const int      knockSensor             = A0;
+const int      threshold               = 20;
+
+unsigned long  curTime                 = 0L;
+
+const int      wakeTime                = 10000;     // milliseconds to stay awake after movement stops
+const int      wakeButton              = 0;         // must assign a particular button to wake up.  "0" on the nodeMCU mini is GPIO 0 = D3
+
+
+unsigned long  lastPush                = 0L;
+unsigned long  lastShake               = 0L;
+
+int            sensorReading           = 0;
+int            secondSensor            = 0;
+int            lastSensor              = 0;
 
 
 
 //------------ DELAY BEHAVIOR 
 
 /* 
-  we define the loop delay, then set maxPoofLimit and poofDelay as
-  integer loop counters based on the actual loop delay.  The default
-  is to poof for no more than 5 seconds, then not respond for 2.5 seconds.  
-  note that we specify time limits as a function of the loop delay, in case
-  it's more than 1 ms.
+  we define the loop delay, then define counters based on the actual loop delay 
+  in case loop Delay is more than 1 ms.
 */
 
 const int           loopDelay     = 1;                      // milliseconds to delay at end of loop
-const int           poofDelay     = int(2500/loopDelay);    // ms to delay after poofing as loop count
-const int           onlineMsg     = int(60000/loopDelay);   // ms to delay between "still online" flashes
+const int           onlineMsg     = int(60000/loopDelay);   // ms to delay between "still online" flashes (5 min)
+int                 stillOnline   = 0;
 
-
-int                 stillOnline   = 0;      // Check for connection timeout every 5 minutes
 
 
 Carnival_debug   debug   = Carnival_debug();
@@ -89,49 +114,85 @@ Carnival_network network = Carnival_network();
 
 
 void setup() {
-    
+ 
+    gpio_init(); // Initilise GPIO pins
 
-    for (int x = 0; x < butCount; x++) {
-        pinMode(allButtons[x], INPUT_PULLUP);
-        butspushed[x] = 0;
+    startButtons();
+
+    // turn off sleep mode if it's on and the button is pressed when booting
+    // may not be working....
+    if(digitalRead(allButtons[0])==LOW && sleep) {
+        sleep = 0;
+        debug.Msg("sleep mode disabled");
     }
-
+ 
     leds.startLEDS();
 
     debug.start(DEBUG,serialSpeed);
     network.start(WHOAMI,DEBUG);
     network.connectWifi();
 
+    curTime = lastPush = millis();
+
 }
+
+
+
 
 
 void loop() {
  
-  // CONFIRM CONNECTION
-    int looksgood = network.reconnect(0);
+    checkConnection();
+ 
+    curTime = millis();
     
+    leds.checkBlue();
+    boolean pushed = checkButtons();
+    boolean shaken = checkSensor();
 
-    stillOnline++;
-    if(stillOnline >= onlineMsg){
-        if(looksgood) {
-          leds.blinkBlue(3, 30, 1); // connection maintained (non-blocking)
-          network.printWifiStatus(); 
-          stillOnline = 0;
-        } else {
-          looksgood = network.reconnect(1);
-        }
-    } 
+    if (!pushed && !shaken) {
+        checkSleep();
+    }
+    
+    delay(loopDelay); // wait a tiny little bit before looping... because reasons
 
-    leds.checkBlue();   
 
-  // REVIEW ALL BUTTONS, STORE AND PUBLISH STATE CHANGE
+} // end main loop
 
+
+
+
+
+
+
+
+
+
+
+
+void startButtons() {
     for (int x = 0; x < butCount; x++) {
+        pinMode(allButtons[x], INPUT_PULLUP);
+        digitalWrite(allButtons[x], HIGH); // connect internal pull-up
 
+        butspushed[x] = 0;
+    }
+}
+
+
+
+// see if any button has been pushed, or released, and send that status
+boolean checkButtons() {
+
+    boolean  someButtonPushed = false;
+    
+    for (int x = 0; x < butCount; x++) {
         int pushed = x+1;
-        if(digitalRead(allButtons[x])==ON) {
+        if(digitalRead(allButtons[x])==LOW) {
             if (!butspushed[x]) {
                 butspushed[x] = 1;
+                someButtonPushed = true;
+
                 if (looksgood) { network.callServer(pushed,1); }
             }
         } else {
@@ -141,17 +202,76 @@ void loop() {
             }          
         }
     }
+    if (someButtonPushed) {
+        lastPush = curTime;
+        debug.Msg("button pushed");
+    }
+    return someButtonPushed;
+}
 
-   
-  // wait a tiny little bit before looping... because reasons
+
+
+// this is non-blocking, and we look for several high readings in a row
+boolean checkSensor(void) {
+
+  if (!shake) { return false; }
+
+  boolean movement = false;
+
+  sensorReading = analogRead(knockSensor);
+ 
+  if (lastSensor>= threshold && secondSensor>=threshold && sensorReading>=threshold) {
+      movement = true;
+// causes a segfault - because it "reads" as a large integer button instead of a message. ("B:shake:")
+//      network.callServer("shake");
+      debug.MsgPart("Knock:");
+      debug.Msg(sensorReading);
+  }
+
+
+  secondSensor = sensorReading;
+  lastSensor = secondSensor;
+
+  if (movement) {
+      lastShake = curTime;    
+  }
+
+  return movement;
+}
+
+
+
+
+
+// confirm we have a connected port and wifi
+void checkConnection() {
+    looksgood = network.reconnect(0);
+
+    stillOnline++;
+    if(stillOnline >= onlineMsg){
+        if(looksgood) {
+          leds.blinkBlue(3, 30, 1); // connection maintained (non-blocking)
+          network.printWifiStatus(); 
+          stillOnline = 0;
+        } else {
+          looksgood = network.reconnect(1);
+          if (looksgood) {
+            leds.blinkBlue(3, 30, 1); // connection maintained (non-blocking)
+          }
+        }
+    } 
+}
+
+// go to sleep if in sleep mode, and it's been "wakeTime" seconds since button(s) pushed
+void checkSleep() {
+
+    if (!sleep) {return;}
     
-    delay(loopDelay);
-
-
-} // end main loop
-
-
-
-
-
+    if ((curTime - lastPush) > wakeTime) {
+        network.sleepNow(wakeButton);
+        debug.Msg("I'm awake!!!");
+        lastPush = millis();
+        stillOnline = 0;
+    }  
+}
 
