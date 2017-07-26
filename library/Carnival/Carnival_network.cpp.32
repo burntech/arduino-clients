@@ -11,7 +11,12 @@
 #include "WConstants.h"
 #endif
 
-#include      <ESP8266WiFi.h>
+//#if ESP
+//#include      <ESP8266WiFi.h>
+//#else
+#include <WiFi.h>
+//#endif
+
 #include      <Carnival_PW.h>
 #include      <Carnival_network.h>
 #include      <Carnival_debug.h>
@@ -19,10 +24,12 @@
 
 
 extern "C" {
-#include "gpio.h"
+//#if ESP
+//#include "gpio.h"
 }
 extern "C" {
-#include "user_interface.h"
+//#if ESP
+//#include "user_interface.h"
 }
 
 #define       REDLED        0        // what pin?
@@ -159,30 +166,8 @@ void Carnival_network::callServer(int message, int optdata){
 }
 
 
-void Carnival_network::callServer(String who, int message){
-  
-    String out = who;
-    out += ":";
-    out += message;
-
-    client.flush();  // clear buffer
-    client.println(out);
-    leds.blinkBlue(3, 10, 1); // show communication
-}   
-
-void Carnival_network::callServer(String who, int message, int optdata){
-  
-    String out = who;
-    out += ":";
-    out += message;
-    out += ":";
-    out += optdata;
-
-    client.flush();  // clear buffer
-    client.println(out);
-    leds.blinkBlue(3, 10, 1); // show communication
-}   
-
+//#if ESP
+/*
 void callback() {
     debug.Msg("Woke up from sleep");
 }
@@ -202,4 +187,4 @@ void Carnival_network::sleepNow(int wakeButton) {
   connectWifi();
   reconnect(1);
 }
-
+*/

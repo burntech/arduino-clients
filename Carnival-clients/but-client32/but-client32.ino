@@ -1,4 +1,5 @@
 /*
+  testing with sparkfunesp32, not yet working
        
     The Button
     
@@ -52,7 +53,7 @@
 #define       serialSpeed   115200  // As appropriate
 
 extern "C" {
-#include "gpio.h"
+//#include "gpio.h"
 }
 
 #include      <Carnival_debug.h>
@@ -65,7 +66,7 @@ extern "C" {
 
 #define        WHOAMI                 "B"           // which device am I?
 #define        butCount                1            // number of buttons connected
-int            allButtons[butCount]    = {2};       // What pins are connected to button(s)
+int            allButtons[butCount]    = {0};       // What pins are connected to button(s)
 int            butspushed[butCount];
 #define        ON                      LOW
 int            looksgood               = 0;
@@ -80,15 +81,20 @@ const int      shake                   = 1;         // detect shaking / has shak
 const int      knockSensor             = A0;
 const int      threshold               = 20;
 
+unsigned long  curTime                 = 0L;
 
+const int      wakeTime                = 10000;     // milliseconds to stay awake after movement stops
+const int      wakeButton              = 0;         // must assign a particular button to wake up.  "0" on the nodeMCU mini is GPIO 0 = D3
+
+
+unsigned long  lastPush                = 0L;
 unsigned long  lastShake               = 0L;
 
 int            sensorReading           = 0;
 int            secondSensor            = 0;
 int            lastSensor              = 0;
 
-long lastPush=0;
-long curTime=0;
+
 
 //------------ DELAY BEHAVIOR 
 
@@ -145,10 +151,12 @@ void loop() {
     boolean pushed = checkButtons();
     boolean shaken = checkSensor();
 
+//#if ESP
+/*
     if (!pushed && !shaken) {
         checkSleep();
     }
-    
+*/    
     delay(loopDelay); // wait a tiny little bit before looping... because reasons
 
 
@@ -209,7 +217,6 @@ boolean checkButtons() {
 // this is non-blocking, and we look for several high readings in a row
 boolean checkSensor(void) {
 
-/*
   if (!shake) { return false; }
 
   boolean movement = false;
@@ -218,7 +225,8 @@ boolean checkSensor(void) {
  
   if (lastSensor>= threshold && secondSensor>=threshold && sensorReading>=threshold) {
       movement = true;
-      network.callServer("SHAKE",sensorReading);
+// causes a segfault - because it "reads" as a large integer button instead of a message. ("B:shake:")
+//      network.callServer("shake");
       debug.MsgPart("Knock:");
       debug.Msg(sensorReading);
   }
@@ -232,8 +240,6 @@ boolean checkSensor(void) {
   }
 
   return movement;
-
-  */
 }
 
 
@@ -259,10 +265,12 @@ void checkConnection() {
     } 
 }
 
+//if ESP
+/*
 // go to sleep if in sleep mode, and it's been "wakeTime" seconds since button(s) pushed
 void checkSleep() {
 
-/*    if (!sleep) {return;}
+    if (!sleep) {return;}
     
     if ((curTime - lastPush) > wakeTime) {
         network.sleepNow(wakeButton);
@@ -270,7 +278,5 @@ void checkSleep() {
         lastPush = millis();
         stillOnline = 0;
     }  
-*/
-
 }
-
+*/

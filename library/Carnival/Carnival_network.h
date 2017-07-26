@@ -30,6 +30,8 @@ class Carnival_network
     void connectWifi();
     void callServer(String message);
     void callServer(int message,int optdata);
+    void callServer(String who,int message);
+    void callServer(String who,int message,int optdata);
     void sleepNow(int wakeButton);
 
 };
