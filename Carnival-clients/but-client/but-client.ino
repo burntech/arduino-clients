@@ -71,8 +71,8 @@ int            butspushed[butCount];
 int            looksgood               = 0;
 
 
-      int      sleep                   = 1;         // 1 - go to sleep if unused for a time, 0, always on
-const int      shake                   = 1;         // detect shaking / has shake sensor / send shake message
+      int      sleep                   = 0;         // 1 - go to sleep if unused for a time, 0, always on
+const int      shake                   = 0;         // detect shaking / has shake sensor / send shake message
 
 
 

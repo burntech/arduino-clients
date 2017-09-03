@@ -29,7 +29,8 @@
     OCt 19 - beginning work non-blocking LEDs
     Dec  4 - created carnival libraries
     May 2, 2017 - added on board button=poofer
-
+    Sep 2, 2017 - added check in startPoof to confirm wifi.  added wifi override mode.
+     
     This code is represents a basic "poofer client".  The
 
     Use the Actuator to receive "poof" commands via a wireless network
@@ -69,7 +70,7 @@
 
 
 
-#define       DEBUG         0         // 1 to print useful messages to the serial port
+#define       DEBUG         1         // 1 to print useful messages to the serial port
 #define       POOFS         1         // whether or not we're hooked up to a poofer (and need the library)
 #define       serialSpeed   115200
 
@@ -87,7 +88,7 @@
 
 //------------ WHICH GAME, WHAT MODE, HOW HOOKED UP
 
-#define       WHOAMI         "SYNCITIUM"    // which game am I?
+#define       WHOAMI         "SIDESHOW"    // which game am I?
 #define       REPORT         "pushed"    // what to report when the button is pushed, if relevant
 const boolean HASBUTTON      = 1;        // Does this unit have a button on it?
 const int     inputButton    = 5;        // What pin is that button on?
@@ -121,7 +122,7 @@ const int           onlineMsg     = int(60000 / loopDelay); // ms to delay betwe
 int         maxPoof          = 0;      // poofer timeout
 int         stopPoofing      = 0;      // hit max poof limit
 boolean     poofing          = 0;      // poofing state (0 is off)
-
+boolean     wifiOverride     = false;  // override need of wifi to poof?
 
 
 int         stillOnline      = 0;      // Check for connection timeout every 5 minutes
@@ -148,6 +149,11 @@ void setup() {
   leds.startLEDS();
   if (HASBUTTON) {
     pinMode(inputButton, INPUT_PULLUP);
+    boolean test = digitalRead(inputButton);
+    if (test == LOW) {
+      // if the button is held down when booting, we're in wifi override mode.
+      wifiOverride = true;
+    }
   }
 
   debug.start(DEBUG, serialSpeed);
@@ -166,17 +172,19 @@ void setup() {
 */
 void loop() {
 
-  // CONFIRM CONNECTION
-  looksgood = network.reconnect(0);
+  if (!wifiOverride) {
+    // CONFIRM CONNECTION
+    looksgood = network.reconnect(0);
 
 
-  stillOnline++;
-  if (stillOnline >= onlineMsg) {
-    looksgood = network.reconnect(1);
-    if (looksgood) {
-      leds.blinkBlue(3, 30, 1); // connection maintained (non-blocking)
-      network.printWifiStatus();
-      stillOnline = 0;
+    stillOnline++;
+    if (stillOnline >= onlineMsg) {
+      looksgood = network.reconnect(1);
+      if (looksgood) {
+        leds.blinkBlue(3, 30, 1); // connection maintained (non-blocking)
+        network.printWifiStatus();
+        stillOnline = 0;
+      }
     }
   }
 
@@ -185,7 +193,7 @@ void loop() {
   // process any incoming messages
   int CA = 0;
 
-  if (looksgood) {
+  if (looksgood && !wifiOverride) {
 
     // there's an incoming message - read one and loop (ignore non-phrases)
 
@@ -257,7 +265,7 @@ void loop() {
   stopPoof();
 
   if (!client.available()) { // Is the server asking for something?
-    if (HASBUTTON) {
+    if (HASBUTTON && (looksgood && stillOnline) || wifiOverride) {
       checkButton();
     }
 
@@ -282,6 +290,9 @@ void loop() {
 
 void startPoof() {
 
+  // only poof if we're in override mode, or we're connected.
+  if (!wifiOverride && !network.reconnect(1)) { return; }
+  
   if (stopPoofing == 0) {
     if (!poofing && maxPoof <= maxPoofLimit) { // if we're not poofing nor at the limit
       poofing = 1;
