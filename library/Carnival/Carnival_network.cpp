@@ -36,6 +36,20 @@ int         status          = WL_IDLE_STATUS;
 String      WHO             = "";
 boolean     DEBUG           = 1;
 
+
+
+//------------ FLAGS, COUNTERS, VARIABLES  -- DONT CHANGE
+
+
+const String  KEEPALIVE        = "KA";     // signal sent to server to maintain socket
+int           looksgood        = 0;        // still connected (0 is not)
+long          stillOnline      = 0L;        // Check for connection timeout every 5 minutes
+long          onlineMsg        = 60000L;    // ms to delay between "still online" flashes
+long          idleTime         = 0L;       // current idle time
+long          maxIdle          = 300000L;  // milliseconds network idle before keep alive signal (5 minutes)
+boolean       wifiOverride     = false;    // don't allow poofing without server connection by default
+
+
 extern Carnival_debug debug;
 extern Carnival_leds leds;
 
@@ -80,9 +94,10 @@ int Carnival_network::reconnect(bool output) {
 
     int con=0;
     // check "connected() less frequently
-    if (!client || (output && !client.connected())) {
+    if (!client || !client.connected()) {
         con = client.connect(HOST,PORT);
         if (con) {
+          client.setNoDelay(1);
           leds.setLED(BLUELED,1);
           // re-announce who we are to the server
           // clean out the input buffer:
@@ -110,6 +125,40 @@ int Carnival_network::reconnect(bool output) {
 }
 
 
+
+void Carnival_network::confirmConnect() {
+  if (!wifiOverride) {
+    // CONFIRM CONNECTION
+    looksgood = reconnect(0);
+    stillOnline++;
+    if (stillOnline >= onlineMsg) {
+      looksgood = reconnect(1);
+      if (looksgood) {
+        printWifiStatus();
+        stillOnline = 0;
+      }
+    }
+  }
+}
+
+
+
+void Carnival_network::keepAlive() {
+  long cTime = millis();
+  if ((cTime - idleTime) > maxIdle) {
+      callServer(KEEPALIVE);
+      idleTime = cTime;
+      debug.Msg("sending keep alive");
+  }
+}
+
+boolean Carnival_network::OK() {
+    if ((looksgood && stillOnline) || wifiOverride) { return true; }
+    return false;
+}
+
+
+
 void Carnival_network::printWifiStatus() {
 
      if (!DEBUG) { return; }
@@ -129,59 +178,123 @@ void Carnival_network::printWifiStatus() {
 }
 
 
+
+
+char* Carnival_network::readMsg() {
+
+    
+    // process any incoming messages
+    int CA = 0;
+    char incoming[64];
+
+    if (looksgood && !wifiOverride) {
+
+        CA =  client.available();
+        if (CA) {
+      
+          // there's an incoming message - read one and loop (ignore non-phrases)
+          // read incoming stream a phrase at a time.
+          int x = 0;
+          int cpst;
+          memset(incoming, NULL, 64);
+          char rcvd = client.read();
+
+          // read until start of phrase (clear any cruft)
+          while (rcvd != '$' && x < CA) {
+              rcvd = client.read();
+              x++;
+          }
+
+          if (rcvd == '$') { /* start of phrase */
+              int n = 0;
+
+              leds.blinkBlue(4, 15, 1); // show communication, non-blocking
+
+              while (rcvd = client.read()) {
+                  if (rcvd == '%') { /* end of phrase - do something */
+
+                      debug.Msg(incoming);
+                      break; // phrase read, end loop
+
+                  } else { // not the end of the phrase
+                      incoming[n] = rcvd;
+                      n++;
+                  }
+              } // end while client.read
+          } // end if $ beginning of phrase
+
+/* why here? */
+
+          idleTime = millis();  // reset idle counter
+      
+      } // end if  client available
+  
+    } // end client looks good
+
+    return incoming;
+  
+}
+
+
+
+
 // send a well-formatted message to the server
-// looks like "WHOMAI:some message:optional data"
+// looks like "WHOMAI:some message:[optional data]"
 
 void Carnival_network::callServer(String message){
-  
-    String out = WHO;
-    out += ":";
-    out += message;
-    out += ":";
-    client.flush();  // clear buffer
-    client.println(out);
-    leds.blinkBlue(3, 10, 1); // show communication
-    
+    callServer(WHO,message);
 }
 
 void Carnival_network::callServer(int message, int optdata){
   
-    String out = WHO;
-    out += ":";
+    String out = "";
     out += message;
     out += ":";
     out += optdata;
 
-    client.flush();  // clear buffer
-    client.println(out);
-    leds.blinkBlue(3, 10, 1); // show communication
-    
+    callServer(WHO,out);
 }
 
 
 void Carnival_network::callServer(String who, int message){
   
-    String out = who;
-    out += ":";
+    String out = "";
     out += message;
+    out += ":";
 
-    client.flush();  // clear buffer
-    client.println(out);
-    leds.blinkBlue(3, 10, 1); // show communication
+    callServer(who,out);
 }   
 
 void Carnival_network::callServer(String who, int message, int optdata){
   
-    String out = who;
-    out += ":";
+    String out = "";
     out += message;
     out += ":";
     out += optdata;
+    
+    callServer(who, out);
+}   
+
+void Carnival_network::callServer(String who, String message){
+ 
+    if (!OK()) { return; }
+ 
+    String out = who;
+    out += ":";
+    out += message;
 
     client.flush();  // clear buffer
     client.println(out);
     leds.blinkBlue(3, 10, 1); // show communication
+    debug.MsgPart(who);
+    debug.MsgPart(" called server with:");
+    debug.Msg(out);
 }   
+
+
+
+// experimental sleep routines
+
 
 void callback() {
     debug.Msg("Woke up from sleep");

@@ -76,6 +76,8 @@
 #include      <Carnival_PW.h>
 #include      <Carnival_network.h>
 #include      <Carnival_leds.h>
+#include      <Carnival_neopx.h>
+#include      <FastLED.h>
 #include      <Carnival_debug.h>
 #ifdef POOFS
     #include  <Carnival_poof.h>
@@ -96,6 +98,7 @@ int           mySolenoids[]  = {12,13,14};  // pins that are poofer solenoids
 const int     numSolenoids   = sizeof(mySolenoids)/sizeof(int);
 
 extern WiFiClient client;
+
 
 
 //------------ DELAY BEHAVIOR 
@@ -131,11 +134,28 @@ int         looksgood        = 0;      // still connected (0 is not)
 Carnival_debug     debug     = Carnival_debug();
 Carnival_network   network   = Carnival_network();
 Carnival_leds      leds      = Carnival_leds();
+Carnival_neopx     neopx     = Carnival_neopx();
 
 
 #ifdef POOFS
     Carnival_poof  pooflib   = Carnival_poof();
 #endif
+
+
+//---NEOP
+
+/*
+ * Current Possible Chipsets:
+ * APA102, APA104, DOTSTAR, GW6205, GW6205_400, LPD8806, NEOPIXEL, P9813, SM16716, TM1803, TM1804, TM1809, WS2801, WS2811, WS2812, WS2812B, WS2811_400, UCS1903, UCS1903B
+*/
+
+const  String    CHIPSET          = "WS2812";
+const  int       NUM_LEDS         = 100;       // How many leds are in the strip?
+const  int       LED_DATA_PIN     = 2;         // 7 is D7/GPIO 13 on nodemcu (serial data, often 2 / yellow on arduino)
+const  int       CLOCK_PIN        = 3;         // 5 is D5/GPIO 14 on nodemcu (clock, often 3 / green on arduino)
+CRGB             THE_LEDS[NUM_LEDS];           // Max array out
+extern int       BRIGHTNESS  = 50;
+extern int       rgb;
 
 
 void setup() {
@@ -144,6 +164,8 @@ void setup() {
     pooflib.setSolenoids(mySolenoids, numSolenoids);   // set relay pins to OUTPUT and turn off
 #endif
     leds.startLEDS();
+    neopx.startNEOS(DEBUG);
+
     if (HASBUTTON) { pinMode(inputButton, INPUT_PULLUP);   }    
 
     debug.start(DEBUG,serialSpeed);

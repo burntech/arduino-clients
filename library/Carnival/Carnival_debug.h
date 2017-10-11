@@ -29,11 +29,13 @@ class Carnival_debug
     void Msg(long message);
     void Msg(unsigned long message);
     void Msg(String message);
+    void Msg(float message);
     void MsgPart(int message);
     void MsgPart(unsigned int message);
     void MsgPart(long message);
     void MsgPart(unsigned long message);
     void MsgPart(String message);
+    void MsgPart(float message);
 
   // library-accessible "private" interface
   private:

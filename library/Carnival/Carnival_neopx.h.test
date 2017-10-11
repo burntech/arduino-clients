@@ -1,0 +1,37 @@
+/*
+  Carnival_neopx.h - Carnival library 
+  Copyright 2017 Neil Verplank.  All right reserved.
+*/
+
+// ensure this library description is only included once
+#ifndef Carnival_neopx_h
+#define Carnival_neopx_h
+
+// include types & constants of other libraries here:
+#if ARDUINO >= 100
+#include "Arduino.h"
+#else
+#include "WProgram.h"
+#endif
+
+#include "WString.h"
+
+
+
+
+
+// library interface description
+class Carnival_neopx
+{
+  // user-accessible "public" interface
+  public:
+    Carnival_neopx();
+    void startNEOS(boolean limitpower);
+    void updateLights(char r, char g, char b);
+    void goBlack();
+    void initLights(String lightType, int order);
+    void initLights(String lightType, int order, int brightness);
+
+};
+
+#endif

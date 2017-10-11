@@ -23,16 +23,21 @@ class Carnival_network
   // user-accessible "public" interface
   public:
     Carnival_network();
-    void start(String who, bool dbug);
-    int reconnect(bool output);
-    void checkSocket();
-    void printWifiStatus();
-    void connectWifi();
-    void callServer(String message);
-    void callServer(int message,int optdata);
-    void callServer(String who,int message);
-    void callServer(String who,int message,int optdata);
-    void sleepNow(int wakeButton);
+    void    start(String who, bool dbug);
+    int     reconnect(bool output);
+    void    checkSocket();
+    void    keepAlive();
+    void    confirmConnect();
+    boolean OK();
+    void    printWifiStatus();
+    void    connectWifi();
+    char*   readMsg();
+    void    callServer(String who, String message);
+    void    callServer(String message);
+    void    callServer(int message,int optdata);
+    void    callServer(String who,int message);
+    void    callServer(String who,int message,int optdata);
+    void    sleepNow(int wakeButton);
 
 };
 

@@ -1,0 +1,227 @@
+/*
+  Carnival_neopx.cpp - Carnival library
+  Copyright 2016 Neil Verplank.  All right reserved.
+*/
+
+// include main library descriptions here as needed.
+#if ARDUINO >= 100
+#include "Arduino.h"
+#else
+#include "WProgram.h"
+#include "WConstants.h"
+#endif
+
+#include "Carnival_neopx.h"
+
+#include "FastLED.h"
+
+
+#define rgb                012
+#define grb                102
+#define bgr                210
+
+/*
+ * Current Possible Chipsets:
+ * APA102, APA104, DOTSTAR, GW6205, GW6205_400, LPD8806, NEOPIXEL, P9813, SM16716, TM1803, TM1804, TM1809, WS2801, WS2811, WS2812, WS2812B, WS2811_400, UCS1903, UCS1903B
+*/
+
+extern const String    CHIPSET;
+extern const int       NUM_LEDS;
+extern const int       LED_DATA_PIN;
+extern const int       CLOCK_PIN;
+extern CRGB            THE_LEDS[];
+
+
+
+int       voltlimit        = 5;
+int       milliamplimit    = 600;
+int       BRIGHTNESS       = 50;        // Initial brightness if any, Max 255
+int       currentLit       = 0;         // which LED is lit in the "loop" - iterate around NUM_LEDS
+
+
+
+Carnival_neopx::Carnival_neopx()
+{
+
+}
+
+
+/*================= LED FUNCTIONS =====================*/
+
+
+void Carnival_neopx::startNEOS(boolean limitpower) {
+
+    if (limitpower) {
+        // limit total power draw (v*ma) through development board
+        // Generally, use this when you're hooked up via a serial cable, 
+        // or you will let the magic smoke out.
+        FastLED.setMaxPowerInVoltsAndMilliamps(voltlimit, milliamplimit);
+    }
+
+    // turn on the library for a given chipset, set an initial brightness (0 is max / don't set)
+    initLights(CHIPSET, rgb, BRIGHTNESS);
+
+}
+
+
+
+
+
+
+void Carnival_neopx::updateLights(char r, char g, char b){
+
+    currentLit = (++currentLit) % NUM_LEDS;
+
+    for (int i = 0; i < NUM_LEDS; i++) {
+        if (i == currentLit){
+            THE_LEDS[i] = CRGB(r,g,b);
+        } else {
+            THE_LEDS[i] = CRGB::Black;
+            THE_LEDS[i].fadeToBlackBy(1);
+        }
+    }
+
+    FastLED.show();
+    FastLED.delay(5);
+
+}
+
+
+
+
+
+
+void Carnival_neopx::goBlack(){
+
+    for(int i = 0; i < NUM_LEDS; i++){
+        THE_LEDS[i] = CRGB::Black;
+    }
+//    FastLED.clear();
+    FastLED.show();
+    FastLED.delay(10);
+
+}
+
+
+
+
+
+
+//############ SELECT CHIPSET
+
+
+
+
+void Carnival_neopx::initLights(String lightType, int order) {
+    Carnival_neopx::initLights(lightType, order, BRIGHTNESS);
+}
+
+
+void Carnival_neopx::initLights(String lightType, int order, int brightness) {
+
+    switch( tolower( lightType[0] ) )
+    {
+        case 'a' :
+            switch( lightType[5] )
+            {
+                case '2' :
+                    if (!order || order == 012) {
+                        FastLED.addLeds<APA102, LED_DATA_PIN, CLOCK_PIN, RGB>(THE_LEDS, NUM_LEDS);
+                    } else if (order == 210) {
+                        FastLED.addLeds<APA102, LED_DATA_PIN, CLOCK_PIN, BGR>(THE_LEDS, NUM_LEDS);
+                    }
+                break;
+                case '4' :
+                    FastLED.addLeds<APA104, LED_DATA_PIN>(THE_LEDS, NUM_LEDS);
+                break;
+            }
+        break;
+
+        case 'd' :
+            FastLED.addLeds<DOTSTAR, LED_DATA_PIN, CLOCK_PIN, RGB>(THE_LEDS, NUM_LEDS);
+        break;
+
+
+        case 'g' :
+            if (sizeof(lightType)/sizeof(char) > 6) {
+                FastLED.addLeds<GW6205_400, LED_DATA_PIN, RGB>(THE_LEDS, NUM_LEDS);
+            } else {
+                FastLED.addLeds<GW6205, LED_DATA_PIN, RGB>(THE_LEDS, NUM_LEDS);
+            }
+        break;
+
+        case 'l' :
+            FastLED.addLeds<LPD8806, LED_DATA_PIN, CLOCK_PIN, RGB>(THE_LEDS, NUM_LEDS);
+        break;
+        case 'n' :
+            FastLED.addLeds<NEOPIXEL, LED_DATA_PIN>(THE_LEDS, NUM_LEDS);
+        break;
+
+        case 'p' :
+            FastLED.addLeds<P9813, LED_DATA_PIN, CLOCK_PIN, RGB>(THE_LEDS, NUM_LEDS);
+        break;
+
+        case 's' :
+            FastLED.addLeds<SM16716, LED_DATA_PIN, CLOCK_PIN, RGB>(THE_LEDS, NUM_LEDS);
+        break;
+
+        case 't' :
+            switch( lightType[5] )
+            {
+                case '3' :
+                    FastLED.addLeds<TM1803, LED_DATA_PIN, RGB>(THE_LEDS, NUM_LEDS);
+                break;
+                case '4' :
+                    FastLED.addLeds<TM1804, LED_DATA_PIN, RGB>(THE_LEDS, NUM_LEDS);
+                break;
+                case '9' :
+                    FastLED.addLeds<TM1809, LED_DATA_PIN, RGB>(THE_LEDS, NUM_LEDS);
+                break;
+            }
+        break;
+
+        case 'u' :
+            if (sizeof(lightType)/sizeof(char) > 7) {
+                FastLED.addLeds<UCS1903B, LED_DATA_PIN, RGB>(THE_LEDS, NUM_LEDS);
+            } else {
+                FastLED.addLeds<UCS1903, LED_DATA_PIN, RGB>(THE_LEDS, NUM_LEDS);
+            }
+        break;
+        case 'w' :
+            switch( lightType[4] )
+            {
+                case '0' :
+                    FastLED.addLeds<WS2801, LED_DATA_PIN, CLOCK_PIN, RGB>(THE_LEDS, NUM_LEDS);
+                break;
+                case '1' :
+                    switch( lightType[5] )
+                    {
+                        case '1' :
+                            if (sizeof(lightType)/sizeof(char) > 7) {
+//                                FastLED.addLeds<WS2811_400, LED_DATA_PIN, RGB>(THE_LEDS, NUM_LEDS);
+                            } else {
+                                FastLED.addLeds<WS2811, LED_DATA_PIN, RGB>(THE_LEDS, NUM_LEDS);
+                            }
+                        break;
+                        case '2' :
+                            if (sizeof(lightType)/sizeof(char) > 6) {
+//                                FastLED.addLeds<WS2812B, LED_DATA_PIN, RGB>(THE_LEDS, NUM_LEDS);
+                            } else {
+                                FastLED.addLeds<WS2812, LED_DATA_PIN, RGB>(THE_LEDS, NUM_LEDS);
+                            }
+                        break;
+                    }
+
+                break;
+            }
+        break;
+
+        default:
+        break;
+    }
+
+    if (brightness) {
+        FastLED.setBrightness(brightness);
+    }
+}
+

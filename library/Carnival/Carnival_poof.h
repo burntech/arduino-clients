@@ -22,8 +22,14 @@ class Carnival_poof
 {
   // user-accessible "public" interface
   public:
-    Carnival_poof();
+    Carnival_poof(int loopDelay);
     void setSolenoids(int aS[], int size);
+
+    void startPoof();
+    void stopPoof();
+    void checkPoofing();
+    void doPoof(char *incoming);
+
     void poofAll(boolean state);
     void poofRight(boolean state);
     void poofRight(boolean state, int rate);  

@@ -1,9 +1,10 @@
 /*
 
-    Poofer Client
 
-    Copyright Nov 26, 2016 - Neil Verplank (neil@capnnemosflamingcarnival.org)
 
+    ESP Client
+
+    Copyright 2016, 2017 - Neil Verplank (neil@capnnemosflamingcarnival.org)
 
     This file is part of The Carnival.
 
@@ -31,7 +32,7 @@
     May 2, 2017 - added on board button=poofer
     Sep 2, 2017 - added check in startPoof to confirm wifi.  added wifi override mode.
      
-    This code is represents a basic "poofer client".  The
+    This code is represents a basic "poofer client". 
 
     Use the Actuator to receive "poof" commands via a wireless network
     (specifically, xc-socket-server running on a Raspberry Pi 3 configured as an AP
@@ -40,11 +41,6 @@
     In a nutshell, hook up "BAT" and ground to a 5V power supply, hookup pin
     12 (or more - see allSolenoids) to the relay (which needs it's own power!
     Huzzah can't drive the relay very well if at all).
-
-    If you want to send high score or some other success to the server,
-    set HASTBUTTON=1, then connect pin inputButton (5?) to ground to send REPORT
-    (via a button, or have the game Arduino use one of its relays to
-    short inputButton to ground momentarily).
 
     If all connections are good, the blue light is steady on.  When receiving a
     communication, the blue LED may "sparkle".  If poofing, the red LED will be
@@ -57,291 +53,223 @@
     versions.  We have reduced the loop delay to 1 ms from 100ms.  We might be able
     to drop to 0, but various aspects of the logic would have to change.
 
+    wifi override - device won't poof without wireless connection to server.  If it
+    has an onboard button, you should be able to hold the button down when booting
+    or restarting, and override the need for a server.
 
 
-    Just noticed this interesting feature somewhere:
+   INTERESTING:
 
-    // Sleep for 6 seconds, then wait for sensor change
-    ESP.deepSleep(6000000, WAKE_RF_DEFAULT);
+   #include <ESP8266WiFiMulti.h>   // Include the Wi-Fi-Multi library
+
+   ESP8266WiFiMulti wifiMulti;     // Create an instance of the ESP8266WiFiMulti class, called 'wifiMulti'
 
 */
 
 
 
 
+/* TURN DEBUGGING, AND / OR POOFING ON AND OFF, SET SERIAL SPEED IF DEBUGGING */
 
-#define       DEBUG         1         // 1 to print useful messages to the serial port
-#define       POOFS         1         // whether or not we're hooked up to a poofer (and need the library)
-#define       serialSpeed   115200
+const int     DEBUG            = 1;        // 1 to print useful messages to the serial port
+
+#define       POOFS                        // whether or not we're hooked up to a poofer (and need the library)
+#define       serialSpeed      115200      // active if debugging
+#define       WHOAMI           "SMOKESTACK"   // which game am I?
+int           inputButtons[]   = {5};      // What pins are buttons on? 
+                                           // (NOTE pin 2 on huzzah is blue LED. smokestack=2, lulu/bb/aerial=5)
+                                           // Also, we test the first pin for wifi override
+int           mySolenoids[]    = {12,13};  // pins that are solenoids
+
+
+// from network lib, somewhat experimental
+extern boolean       wifiOverride;   // override need of wifi to use button by holding down button while booting, default = 0
+
+
+/* DONT CHANGE */
+
+#define       DEBOUNCE         50          // minimum milliseconds between state change
+const int     numSolenoids     = sizeof(mySolenoids) / sizeof(int);
+const int     butCount         = sizeof(inputButtons) / sizeof(int);
+const int     loopDelay        = 1;        // milliseconds to delay at end of loop if nothing else occurs
+boolean       onboardPush[butCount];       // physical button is currently pushed (not wireless)
+long          lastButsChgd[butCount];      // most recently allowed state change for given button
+int           butspushed[butCount];        // state of a given button
 
 
 #include      <ESP8266WiFi.h>
-#include      <Carnival_PW.h>
-#include      <Carnival_network.h>
-#include      <Carnival_leds.h>
-#include      <Carnival_debug.h>
+
+#include      <Carnival_PW.h>              // your networking passwords file
+#include      <Carnival_network.h>         // networking library
+#include      <Carnival_leds.h>            // onboard LED library
+#include      <Carnival_debug.h>           // debug messages library
+
+
+
+/* EXTERNAL FLAGS AND LIMITS YOU CAN SET*/
 #ifdef POOFS
-#include  <Carnival_poof.h>
+  #include  <Carnival_poof.h>
+
+  extern boolean POOFSTORM;     // Allow poofstorm? Default = no.
+  extern int     maxPoofLimit;  // absolute maximum time to allow a poof, default = 5000 ms
+  extern int     poofDelay;     // time in ms to delay after manual poofing to allow poof again, default = 2500 ms
+
 #endif
 
 
 
-//------------ WHICH GAME, WHAT MODE, HOW HOOKED UP
 
-#define       WHOAMI         "SIDESHOW"    // which game am I?
-#define       REPORT         "pushed"    // what to report when the button is pushed, if relevant
-const boolean HASBUTTON      = 1;        // Does this unit have a button on it?
-const int     inputButton    = 5;        // What pin is that button on?
-boolean       onboardPush    = false;    // physical button currently pushed (not wireless)
 
-const boolean POOFSTORM      = 1;        // Allow poofstorm?
-int           mySolenoids[]  = {12, 13};  // pins that are poofer solenoids  (note on huzzah, doesn't like pins 14 or 15 for relays.)
-const int     numSolenoids   = sizeof(mySolenoids) / sizeof(int);
+
+// ----------- CREATE LIBRARIES -- DONT CHANGE
 
 extern WiFiClient client;
-
-
-//------------ DELAY BEHAVIOR
-
-/*
-  we define the loop delay, then set maxPoofLimit and poofDelay as
-  integer loop counters based on the actual loop delay.  The default
-  is to poof for no more than 5 seconds, then not respond for 2.5 seconds.
-  note that we specify time limits as a function of the loop delay, in case
-  it's more than 1 ms.
-*/
-
-const int           loopDelay     = 1;                      // milliseconds to delay at end of loop
-const int           maxPoofLimit  = int(5000 / loopDelay);  // milliseconds to limit poof, converted to loop count
-const int           poofDelay     = int(2500 / loopDelay);  // ms to delay after poofing as loop count
-const int           onlineMsg     = int(60000 / loopDelay); // ms to delay between "still online" flashes
-
-
-//------------ FLAGS, COUNTERS, VARIABLES
-
-int         maxPoof          = 0;      // poofer timeout
-int         stopPoofing      = 0;      // hit max poof limit
-boolean     poofing          = 0;      // poofing state (0 is off)
-boolean     wifiOverride     = false;  // override need of wifi to poof?
-
-
-int         stillOnline      = 0;      // Check for connection timeout every 5 minutes
-int         looksgood        = 0;      // still connected (0 is not)
-
-
-
 
 Carnival_debug     debug     = Carnival_debug();
 Carnival_network   network   = Carnival_network();
 Carnival_leds      leds      = Carnival_leds();
 
-
 #ifdef POOFS
-Carnival_poof  pooflib   = Carnival_poof();
+  Carnival_poof    pooflib   = Carnival_poof(loopDelay);
 #endif
+
+
+
+
+
 
 
 void setup() {
 
-#ifdef POOFS
-  pooflib.setSolenoids(mySolenoids, numSolenoids);   // set relay pins to OUTPUT and turn off
-#endif
-  leds.startLEDS();
-  if (HASBUTTON) {
-    pinMode(inputButton, INPUT_PULLUP);
-    boolean test = digitalRead(inputButton);
-    if (test == LOW) {
-      // if the button is held down when booting, we're in wifi override mode.
-      wifiOverride = true;
-    }
-  }
+    #ifdef POOFS
+        pooflib.setSolenoids(mySolenoids, numSolenoids);   // set relay pins to OUTPUT and turn off
+    #endif
 
-  debug.start(DEBUG, serialSpeed);
-  network.start(WHOAMI, DEBUG);
-  network.connectWifi();
+    leds.startLEDS();                     // onboard LEDS
+    initButtons();                        // set up onboard button if it exists
+    debug.start(DEBUG, serialSpeed);
+    network.start(WHOAMI, DEBUG);
+    network.connectWifi();
 
 }
 
 
 /*
    We're looping, looking for signals from the server to poof (or do something)
-   or signals from the game to send to the server (high score!).
+   or signals from the game to send to the server (buttonn pushed! high score!).
 
    We start poofing when we get a signal, stop when we get a stop.  We also stop
    when we reach maxPoof.
 */
 void loop() {
 
-  if (!wifiOverride) {
-    // CONFIRM CONNECTION
-    looksgood = network.reconnect(0);
+    network.confirmConnect();       // confirm wireless connection, socket connection
 
+    leds.checkBlue();               // check led status
 
-    stillOnline++;
-    if (stillOnline >= onlineMsg) {
-      looksgood = network.reconnect(1);
-      if (looksgood) {
-        leds.blinkBlue(3, 30, 1); // connection maintained (non-blocking)
-        network.printWifiStatus();
-        stillOnline = 0;
-      }
+    char* msg = network.readMsg();  // read any incoming messages
+
+    if (msg) {
+        processMsg(msg);            // process any incoming messages
     }
-  }
 
-  leds.checkBlue();
+    int butPushed = checkButtons();                  // check button state, state change
 
-  // process any incoming messages
-  int CA = 0;
+#ifdef POOFS
+    pooflib.checkPoofing();         // check for start, stop, or still poofing         
+#endif
 
-  if (looksgood && !wifiOverride) {
+    network.keepAlive();            // periodically confirm connection with messaging
 
-    // there's an incoming message - read one and loop (ignore non-phrases)
+    delay(loopDelay);               // time sync here? nano delay?
 
-    CA =  client.available();
-    if (CA) {
+}  // end main loop
 
-      // read incoming stream a phrase at a time.
-      int x = 0;
-      int cpst;
-      char incoming[64];
-      memset(incoming, NULL, 64);
-      char rcvd = client.read();
 
-      // read until start of phrase (clear any cruft)
-      while (rcvd != '$' && x < CA) {
-        rcvd = client.read();
-        x++;
-      }
 
-      if (rcvd == '$') { /* start of phrase */
-        int n = 0;
 
-        leds.blinkBlue(4, 15, 1); // show communication, non-blocking
 
-        while (rcvd = client.read()) {
-          if (rcvd == '%') { /* end of phrase - do something */
-            if (strcmp(incoming, "p1") == 0) {
-              /* strings are equal, poof it up */
-              // if we've previously hit maxPoofLimit, we ignore incoming
-              // attempts to poof for poofDelay loops
-              startPoof();
-            } else if (strcmp(incoming, "p2") == 0) {
-              if (stopPoofing == 0) {
-                debug.Msg(incoming);
-                if (POOFSTORM) {
-                  pooflib.poofStorm();
-                }
-              }
-            } else if (strcmp(incoming, "p0") == 0) {
-              debug.Msg("Poofing stopped");
-              poofing = 0;
-            } else {
-              // it's some other phrase
-              poofing = 0;
-              debug.Msg(incoming);
-              debug.Msg("other phrase, poofing 0");
+void initButtons() {
+
+    if (!butCount) { return; }
+    
+    for (int x = 0; x < butCount; x++) {
+        pinMode(inputButtons[x], INPUT_PULLUP);
+        digitalWrite(inputButtons[x], HIGH); // connect internal pull-up
+        butspushed[x] = 0;
+        if (!wifiOverride && x == 0) {
+            // if it's the first button and it's pushed set override = true
+            boolean test = digitalRead(inputButtons[x]);
+            if (test == LOW) {
+                // if the button is held down when booting, we're in wifi override mode.
+                wifiOverride = true;
             }
-            break; // phrase read, end loop
-
-          } else { // not the end of the phrase
-            incoming[n] = rcvd;
-            n++;
-          }
-        } // end while client.read
-      } // end if $ beginning of phrase
-    } // end if  client available
-  } // end client looksgood
-  else { // no connection, stop poofing
-    poofing = 0;
-  }
-
-  if (maxPoof > maxPoofLimit) {
-    /* hit our poofing limit, we force a stop for a minimum period of time */
-    poofing = 0;
-    stopPoofing = poofDelay;
-    maxPoof = 0;
-  }
-
-  stopPoof();
-
-  if (!client.available()) { // Is the server asking for something?
-    if (HASBUTTON && (looksgood && stillOnline) || wifiOverride) {
-      checkButton();
-    }
-
-    /*
-      if not poofing, decrement our paus poofing counter.
-      if poofing, increment our timeout counter.
-    */
-
-    if (stopPoofing > 0) {
-      stopPoofing--;
-    }
-    else if (poofing == 1) {
-      maxPoof++;
-    }
-
-    /* wait a tiny little bit... because reasons */
-    delay(loopDelay);
-
-  }
-
+        }
+    }   
 }
 
-void startPoof() {
 
-  // only poof if we're in override mode, or we're connected.
-  if (!wifiOverride && !network.reconnect(1)) { return; }
-  
-  if (stopPoofing == 0) {
-    if (!poofing && maxPoof <= maxPoofLimit) { // if we're not poofing nor at the limit
-      poofing = 1;
-      debug.Msg("Poofing started");
-      leds.setRedLED(1);
-      pooflib.poofAll(true);
-    }
-  }
 
-}
 
-void stopPoof() {
+void processMsg(char *incoming) {
 
-  if (poofing == 0) {
-    leds.setRedLED(0);
-    // turn off all poofers
-    pooflib.poofAll(false);
-    maxPoof = 0;
-  }
+    if (incoming[0] == 'p') {
+#ifdef POOFS
+        // it's message about poofing, handle it
+        pooflib.doPoof(incoming);
+#endif
+    } // else some other message.....
 
 }
 
 
 
-/*
-    do something if the inputButton has been pushed.
-    we may want to use serial communications with the main game
-    board, so we can get alphanumeric info...
-*/
 
-int checkButton() {
 
-  boolean shotValue = digitalRead(inputButton);
 
-  if (shotValue == LOW) {
-    /*        // button being pushed
-            debug.Msg("Button pushed!");
-            network.callServer(REPORT);
-            leds.blinkBlue(5, 30, 1); // show communication
-    */
-    onboardPush = 1;
-    startPoof();
+/*  do something if the inputButton has been pushed or released.  */
 
-  } else if (onboardPush) {
-    poofing = 0;
-    onboardPush = 0;
-    stopPoof();
-  }
+int checkButtons() {
 
+    int somebutton = 0;
+    
+    if (butCount && network.OK()) {  // allow push if we have button, and are connected (or wifiOverride)
+
+        for (int x = 0; x < butCount; x++) {
+
+            int pushed = x+1;
+
+            boolean shotValue = digitalRead(inputButtons[x]);
+
+            if (shotValue == LOW) {                  // button pushed
+                if (!onboardPush[x]) {               // first (?) detection of push
+                    if ((millis() - lastButsChgd[x]) > DEBOUNCE) {
+                        onboardPush[x] = true;
+                        somebutton = pushed;
+                        lastButsChgd[x] = millis();
+#ifdef POOFS
+                        pooflib.startPoof();         // start poofing if relevant
+#endif
+                        network.callServer(pushed,1);
+                    }
+                }
+            } else {                                 // not pushed
+                if (onboardPush[x]) {                // button just released
+                    if ((millis() - lastButsChgd[x]) > DEBOUNCE) {
+                        onboardPush[x]   = false;
+                        lastButsChgd[x] = millis();
+#ifdef POOFS
+                        pooflib.stopPoof();           // stop poofing, if relevant
+#endif
+                        network.callServer(pushed,0);
+                    }
+                }
+            }
+        }
+   }
+
+   return somebutton;
+   
 }
 
 

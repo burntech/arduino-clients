@@ -47,9 +47,20 @@
     
 */
 
+//------------ WHICH GAME, WHAT MODE, HOW HOOKED UP
 
-#define       DEBUG         1       // 1 to print useful messages to the serial port
-#define       serialSpeed   115200  // As appropriate
+#define        DEBUG                   1           // 1 to print useful messages to the serial port
+#define        serialSpeed             115200      // As appropriate
+#define        WHOAMI                  "B"         // which device am I?
+int            allButtons[]            = {4,5};    // What pins are connected to button(s)
+      int      sleep                   = 0;        // 1 - go to sleep if unused for a time, 0, always on
+const int      shake                   = 0;        // detect shaking / has shake sensor / send shake message
+
+
+
+#define        ON                      LOW
+const int      butCount                = sizeof(allButtons) / sizeof(int);
+int            butspushed[butCount];
 
 extern "C" {
 #include "gpio.h"
@@ -60,35 +71,19 @@ extern "C" {
 #include      <Carnival_leds.h>
 
 
-//------------ WHICH GAME, WHAT MODE, HOW HOOKED UP
-
-
-#define        WHOAMI                 "B"           // which device am I?
-#define        butCount                1            // number of buttons connected
-int            allButtons[butCount]    = {2};       // What pins are connected to button(s)
-int            butspushed[butCount];
-#define        ON                      LOW
-int            looksgood               = 0;
-
-
-      int      sleep                   = 0;         // 1 - go to sleep if unused for a time, 0, always on
-const int      shake                   = 0;         // detect shaking / has shake sensor / send shake message
-
-
 
 
 const int      knockSensor             = A0;
 const int      threshold               = 20;
-
-
 unsigned long  lastShake               = 0L;
-
 int            sensorReading           = 0;
 int            secondSensor            = 0;
 int            lastSensor              = 0;
 
-long lastPush=0;
-long curTime=0;
+
+
+long           lastPush                = 0;
+long           curTime                 = 0;
 
 //------------ DELAY BEHAVIOR 
 
@@ -98,8 +93,6 @@ long curTime=0;
 */
 
 const int           loopDelay     = 1;                      // milliseconds to delay at end of loop
-const int           onlineMsg     = int(60000/loopDelay);   // ms to delay between "still online" flashes (5 min)
-int                 stillOnline   = 0;
 
 
 
@@ -110,9 +103,8 @@ Carnival_network network = Carnival_network();
 
 void setup() {
  
-    gpio_init(); // Initilise GPIO pins
-
-    startButtons();
+    gpio_init();     // Initialise GPIO pins
+    initButtons();  // set up onboard buttons
 
     // turn off sleep mode if it's on and the button is pressed when booting
     // may not be working....
@@ -121,33 +113,37 @@ void setup() {
         debug.Msg("sleep mode disabled");
     }
  
-    leds.startLEDS();
-
-    debug.start(DEBUG,serialSpeed);
+    leds.startLEDS();                // set up onboard leds
+    debug.start(DEBUG,serialSpeed); 
     network.start(WHOAMI,DEBUG);
     network.connectWifi();
-
     curTime = lastPush = millis();
 
 }
 
 
 
+boolean pushed = false;
+boolean shaken = false;
 
 
 void loop() {
  
-    checkConnection();
+    network.confirmConnect();
  
     curTime = millis();
     
     leds.checkBlue();
-    boolean pushed = checkButtons();
-    boolean shaken = checkSensor();
+
+    pushed = checkButtons();
+
+    shaken = checkSensor();
 
     if (!pushed && !shaken) {
         checkSleep();
     }
+
+    network.keepAlive();
     
     delay(loopDelay); // wait a tiny little bit before looping... because reasons
 
@@ -165,7 +161,7 @@ void loop() {
 
 
 
-void startButtons() {
+void initButtons() {
     for (int x = 0; x < butCount; x++) {
         pinMode(allButtons[x], INPUT_PULLUP);
         digitalWrite(allButtons[x], HIGH); // connect internal pull-up
@@ -180,6 +176,7 @@ void startButtons() {
 boolean checkButtons() {
 
     boolean  someButtonPushed = false;
+    if (!butCount) { return false; }
     
     for (int x = 0; x < butCount; x++) {
         int pushed = x+1;
@@ -187,13 +184,12 @@ boolean checkButtons() {
             if (!butspushed[x]) {
                 butspushed[x] = 1;
                 someButtonPushed = true;
-
-                if (looksgood) { network.callServer(pushed,1); }
+                network.callServer(pushed,1);
             }
         } else {
             if (butspushed[x]) {
                 butspushed[x] = 0;
-                if (looksgood) { network.callServer(pushed,0); }
+                network.callServer(pushed,0);
             }          
         }
     }
@@ -209,9 +205,10 @@ boolean checkButtons() {
 // this is non-blocking, and we look for several high readings in a row
 boolean checkSensor(void) {
 
-/*
+
   if (!shake) { return false; }
 
+/*
   boolean movement = false;
 
   sensorReading = analogRead(knockSensor);
@@ -237,27 +234,6 @@ boolean checkSensor(void) {
 }
 
 
-
-
-
-// confirm we have a connected port and wifi
-void checkConnection() {
-    looksgood = network.reconnect(0);
-
-    stillOnline++;
-    if(stillOnline >= onlineMsg){
-        if(looksgood) {
-          leds.blinkBlue(3, 30, 1); // connection maintained (non-blocking)
-          network.printWifiStatus(); 
-          stillOnline = 0;
-        } else {
-          looksgood = network.reconnect(1);
-          if (looksgood) {
-            leds.blinkBlue(3, 30, 1); // connection maintained (non-blocking)
-          }
-        }
-    } 
-}
 
 // go to sleep if in sleep mode, and it's been "wakeTime" seconds since button(s) pushed
 void checkSleep() {

@@ -63,6 +63,9 @@ void Carnival_debug::Msg(unsigned long message){
 void Carnival_debug::Msg(String message){
   if (MY_DEBUG) { piece_out += message; Carnival_debug::MsgOut(); }
 }
+void Carnival_debug::Msg(float message){
+  if (MY_DEBUG) { piece_out += message; Carnival_debug::MsgOut(); }
+}
 
 
 void Carnival_debug::MsgPart(int message){
@@ -78,6 +81,9 @@ void Carnival_debug::MsgPart(unsigned long message){
   if (MY_DEBUG) { piece_out += message; }
 }
 void Carnival_debug::MsgPart(String message){
+  if (MY_DEBUG) { piece_out += message; }
+}
+void Carnival_debug::MsgPart(float message){
   if (MY_DEBUG) { piece_out += message; }
 }
 
