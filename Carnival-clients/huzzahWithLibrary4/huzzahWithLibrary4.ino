@@ -71,13 +71,13 @@
 
 /* TURN DEBUGGING, AND / OR POOFING ON AND OFF, SET SERIAL SPEED IF DEBUGGING */
 
-const int     DEBUG            = 1;        // 1 to print useful messages to the serial port
+const int     DEBUG            = 0;        // 1 to print useful messages to the serial port
 
-#define       POOFS                        // whether or not we're hooked up to a poofer (and need the library)
+#define       POOFS                      // comment out for buttons
 #define       serialSpeed      115200      // active if debugging
-#define       WHOAMI           "SMOKESTACK"   // which game am I?
-int           inputButtons[]   = {5};      // What pins are buttons on? 
-                                           // (NOTE pin 2 on huzzah is blue LED. smokestack=2, lulu/bb/aerial=5)
+#define       WHOAMI           "SMOKESTACK"         // which effect am I?
+int           inputButtons[]   = {5,4};    // What pins are buttons on? 
+                                           // (NOTE pin 2 on huzzah is blue LED)
                                            // Also, we test the first pin for wifi override
 int           mySolenoids[]    = {12,13};  // pins that are solenoids
 
@@ -88,7 +88,7 @@ extern boolean       wifiOverride;   // override need of wifi to use button by h
 
 /* DONT CHANGE */
 
-#define       DEBOUNCE         50          // minimum milliseconds between state change
+#define       DEBOUNCE         30          // minimum milliseconds between state change
 const int     numSolenoids     = sizeof(mySolenoids) / sizeof(int);
 const int     butCount         = sizeof(inputButtons) / sizeof(int);
 const int     loopDelay        = 1;        // milliseconds to delay at end of loop if nothing else occurs
@@ -150,6 +150,17 @@ void setup() {
     debug.start(DEBUG, serialSpeed);
     network.start(WHOAMI, DEBUG);
     network.connectWifi();
+    network.confirmConnect();       // confirm wireless connection, socket connection
+
+    /*  
+       good place to send control messages, eg:
+ 
+         network.callServer(WHOAMI,"*:DS:1");                // set the don't_send flag (good for buttons and such)
+         network.callServer(WHOAMI,"*:CC:EFFECT1,EFFECT2");  // set my broadcast collection to EFFECT1 and EFFECT2
+         
+    */
+     
+    // network.callServer(WHOAMI,"*:DS:1");
 
 }
 
@@ -234,11 +245,8 @@ int checkButtons() {
     int somebutton = 0;
     
     if (butCount && network.OK()) {  // allow push if we have button, and are connected (or wifiOverride)
-
         for (int x = 0; x < butCount; x++) {
-
-            int pushed = x+1;
-
+            int     pushed    = x+1;
             boolean shotValue = digitalRead(inputButtons[x]);
 
             if (shotValue == LOW) {                  // button pushed
@@ -269,7 +277,6 @@ int checkButtons() {
    }
 
    return somebutton;
-   
 }
 
 

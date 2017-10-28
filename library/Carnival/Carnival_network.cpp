@@ -97,7 +97,7 @@ int Carnival_network::reconnect(bool output) {
     if (!client || !client.connected()) {
         con = client.connect(HOST,PORT);
         if (con) {
-          client.setNoDelay(1);
+          client.setNoDelay(1); // turn off Nagle's algorithm (is this the right place?)
           leds.setLED(BLUELED,1);
           // re-announce who we are to the server
           // clean out the input buffer:
@@ -143,6 +143,7 @@ void Carnival_network::confirmConnect() {
 
 
 
+
 void Carnival_network::keepAlive() {
   long cTime = millis();
   if ((cTime - idleTime) > maxIdle) {
@@ -152,10 +153,14 @@ void Carnival_network::keepAlive() {
   }
 }
 
+
+
+
 boolean Carnival_network::OK() {
     if ((looksgood && stillOnline) || wifiOverride) { return true; }
     return false;
 }
+
 
 
 
