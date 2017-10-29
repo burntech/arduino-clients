@@ -213,8 +213,6 @@ char* Carnival_network::readMsg() {
           if (rcvd == '$') { /* start of phrase */
               int n = 0;
 
-              leds.blinkBlue(4, 15, 1); // show communication, non-blocking
-
               while (rcvd = client.read()) {
                   if (rcvd == '%') { /* end of phrase - do something */
 
@@ -226,9 +224,10 @@ char* Carnival_network::readMsg() {
                       n++;
                   }
               } // end while client.read
-          } // end if $ beginning of phrase
 
-/* why here? */
+              leds.blinkBlue(4, 15, 1); // show communication, non-blocking
+
+          } // end if $ beginning of phrase
 
           idleTime = millis();  // reset idle counter
       

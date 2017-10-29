@@ -93,30 +93,25 @@ void Carnival_poof::setSolenoids(int aS[], int size) {
 
 void Carnival_poof::startPoof() {
 
-  // only poof if we're in override mode, or we're connected.
-  if (!wifiOverride && !network.reconnect(1)) { return; }
-
   if (pausePoofing == 0) {
     if (!poofing && maxPoof <= maxPoofLimit) { // if we're not poofing nor at the limit
       poofing = 1;
+      poofAll(true);
       debug.MsgPart("Poofing started:");
       debug.Msg(millis());
       leds.setRedLED(1);
-      poofAll(true);
     }
   }
 }
 
 
 void Carnival_poof::stopPoof() {
-
-    leds.setRedLED(0);
-    // turn off all poofers
+    poofing = 0;
     poofAll(false);
     maxPoof = 0;
-    poofing = 0;
     debug.MsgPart("Poofing stopped:");
     debug.Msg(millis());
+    leds.setRedLED(0);
  
 }
 
@@ -151,14 +146,14 @@ void Carnival_poof::doPoof(char *incoming) {
 
     if (strcmp(incoming, "p1") == 0) {        // start / keep poofing
         startPoof();
+    } else if (strcmp(incoming, "p0") == 0) { // stop poofing
+        stopPoof();
     } else if (strcmp(incoming, "p2") == 0) { // poofstorm if allowed and still poofing
         if (pausePoofing == 0) {
             if (POOFSTORM) {
                 poofStorm();
             }
         }
-    } else if (strcmp(incoming, "p0") == 0) { // stop poofing
-        stopPoof();
     } 
 
 }

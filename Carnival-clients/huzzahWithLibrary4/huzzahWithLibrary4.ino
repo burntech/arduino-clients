@@ -75,8 +75,8 @@ const int     DEBUG            = 0;        // 1 to print useful messages to the 
 
 #define       POOFS                      // comment out for buttons
 #define       serialSpeed      115200      // active if debugging
-#define       WHOAMI           "SMOKESTACK"         // which effect am I?
-int           inputButtons[]   = {5,4};    // What pins are buttons on? 
+#define       WHOAMI           "BIGBETTY"         // which effect am I?
+int           inputButtons[]   = {5};    // What pins are buttons on? 
                                            // (NOTE pin 2 on huzzah is blue LED)
                                            // Also, we test the first pin for wifi override
 int           mySolenoids[]    = {12,13};  // pins that are solenoids
@@ -88,7 +88,7 @@ extern boolean       wifiOverride;   // override need of wifi to use button by h
 
 /* DONT CHANGE */
 
-#define       DEBOUNCE         30          // minimum milliseconds between state change
+#define       DEBOUNCE         50          // minimum milliseconds between state change
 const int     numSolenoids     = sizeof(mySolenoids) / sizeof(int);
 const int     butCount         = sizeof(inputButtons) / sizeof(int);
 const int     loopDelay        = 1;        // milliseconds to delay at end of loop if nothing else occurs
@@ -159,7 +159,7 @@ void setup() {
          network.callServer(WHOAMI,"*:CC:EFFECT1,EFFECT2");  // set my broadcast collection to EFFECT1 and EFFECT2
          
     */
-     
+
     // network.callServer(WHOAMI,"*:DS:1");
 
 }
