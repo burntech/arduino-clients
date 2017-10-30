@@ -24,6 +24,9 @@ class Carnival_leds
   public:
     Carnival_leds();
     void startLEDS();
+    void startLEDS(int red, int blue);
+    int  redPin();
+    int  bluePin();
     void setLED(int ledpin, bool state);
     void setRedLED(bool state);
     void flashLED(int whichLED, int times, int rate, bool finish);

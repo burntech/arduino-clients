@@ -25,8 +25,6 @@ extern "C" {
 #include "user_interface.h"
 }
 
-#define       REDLED        0        // what pin?
-#define       BLUELED       2        // what pin?
 const boolean ON            = LOW;     // LED ON
 const boolean OFF           = HIGH;    // LED OFF
 
@@ -78,7 +76,7 @@ void Carnival_network::connectWifi(){
         WiFi.mode(WIFI_STA);
         status = WiFi.begin(ssid, pass);  // connect to network
         // flash and wait 10 seconds for connection:
-        leds.flashLED(BLUELED, 10, 166, false); // flash slowly (non-blocking) to show attempt
+        leds.flashLED(leds.bluePin(), 10, 166, false); // flash slowly (non-blocking) to show attempt
     }
     if (DEBUG) {
        if (status==WL_CONNECTED) { printWifiStatus(); }
@@ -98,10 +96,8 @@ int Carnival_network::reconnect(bool output) {
         con = client.connect(HOST,PORT);
         if (con) {
           client.setNoDelay(1); // turn off Nagle's algorithm (is this the right place?)
-          leds.setLED(BLUELED,1);
-          // re-announce who we are to the server
-          // clean out the input buffer:
-          client.flush();
+          leds.setLED(leds.bluePin(),1);
+          // (re) announce who we are to the server
           client.println(WHO); // Tell server which game
           if (output) {
             debug.MsgPart(WHO);
@@ -114,8 +110,8 @@ int Carnival_network::reconnect(bool output) {
     if (!con) {
       
         debug.Msg("Socket connection failed"); 
-        leds.setLED(BLUELED,0);
-        leds.flashLED(REDLED, 5, 25, false);   // flash 5 times to indicate failure
+        leds.setLED(leds.redPin(),0);
+        leds.flashLED(leds.bluePin(), 5, 25, false);   // flash 5 times to indicate failure
         delay(1000);            // wait a little before trying again
         return 0;
         
@@ -287,7 +283,6 @@ void Carnival_network::callServer(String who, String message){
     out += ":";
     out += message;
 
-    client.flush();  // clear buffer
     client.println(out);
     leds.blinkBlue(3, 10, 1); // show communication
     debug.MsgPart(who);
@@ -307,7 +302,7 @@ void callback() {
 void Carnival_network::sleepNow(int wakeButton) {
   pinMode(wakeButton, INPUT_PULLUP);
   debug.Msg("going to light sleep...");
-  leds.setLED(BLUELED,0);
+  leds.setLED(leds.bluePin(),0);
   delay(100);
   wifi_set_opmode(NULL_MODE);
   wifi_fpm_set_sleep_type(LIGHT_SLEEP_T); //light sleep mode

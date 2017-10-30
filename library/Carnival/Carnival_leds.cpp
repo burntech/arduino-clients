@@ -13,8 +13,8 @@
 
 #include <Carnival_leds.h>
 
-#define     REDLED        0          // what pin?
-#define     BLUELED       2          // what pin?
+int         REDLED        = 0;       // what pin?
+int         BLUELED       = 2;       // what pin?
 const       boolean ON    = LOW;     // LED ON
 const       boolean OFF   = HIGH;    // LED OFF
 int         blue_counter  = 0;
@@ -41,6 +41,20 @@ void Carnival_leds::startLEDS() {
     digitalWrite(BLUELED, OFF);        // and turn it off
 }
 
+void Carnival_leds::startLEDS(int red, int blue) {
+    pinMode(red, OUTPUT);           // set up LED
+    pinMode(blue, OUTPUT);          // set up Blue LED
+    digitalWrite(REDLED, OFF);         // and turn it off
+    digitalWrite(BLUELED, OFF);        // and turn it off
+}
+
+int Carnival_leds::redPin() {
+    return REDLED;
+}
+
+int Carnival_leds::bluePin() {
+    return BLUELED;
+}
 
 // we pass in 1 for light on, 0 for light off,
 // but digital pins are on when low....

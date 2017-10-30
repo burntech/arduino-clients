@@ -6,7 +6,7 @@
 
     Copyright 2016, 2017 - Neil Verplank (neil@capnnemosflamingcarnival.org)
 
-    This file is part of The Carnival.
+    ths file is part of The Carnival.
 
     The Carnival is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -32,7 +32,7 @@
     May 2, 2017 - added on board button=poofer
     Sep 2, 2017 - added check in startPoof to confirm wifi.  added wifi override mode.
      
-    This code is represents a basic "poofer client". 
+    ths code is represents a basic "poofer client". 
 
     Use the Actuator to receive "poof" commands via a wireless network
     (specifically, xc-socket-server running on a Raspberry Pi 3 configured as an AP
@@ -71,27 +71,28 @@
 
 /* TURN DEBUGGING, AND / OR POOFING ON AND OFF, SET SERIAL SPEED IF DEBUGGING */
 
-const int     DEBUG            = 0;        // 1 to print useful messages to the serial port
+const int     DEBUG            = 1;        // 1 to print useful messages to the serial port
 
-#define       WHOAMI           "DRAGON"    // which effect am I?
 #define       ESP                          // COMMENT OUT FOR ARDUINO
 #define       POOFS                        // COMMENT OUT FOR BUTTONS AND ETC&
 //#define     DNS                          // UN-COMMENT to turn off incoming signals (ie. if you're a button)
 
+
+#define       serialSpeed      115200      // active if debugging
+#define       WHOAMI           "DRAGON"    // which effect am I?
 int           inputButtons[]   = {5};      // What pins are buttons on? (5, 4 ...)
                                            // (NOTE pin 2 on huzzah is blue LED - DON'T USE)
+                                           // Also, we test the first button pin for wifi override on boot
 int           mySolenoids[]    = {12,13};  // pins that are solenoids (12, 13, 14?, A0?)
 
 
-/* Probably don't need to change */
-
-extern boolean wifiOverride;               // override need of wifi: to use hold down 1st button while booting, default = 0
-#define       serialSpeed      115200      // active if debugging
-#define       DEBOUNCE         50          // minimum milliseconds between state change
+// from network lib, somewhat experimental
+extern boolean       wifiOverride;   // override need of wifi to use button by holding down button while booting, default = 0
 
 
 /* DONT CHANGE */
 
+#define       DEBOUNCE         50          // minimum milliseconds between state change
 const int     numSolenoids     = sizeof(mySolenoids) / sizeof(int);
 const int     butCount         = sizeof(inputButtons) / sizeof(int);
 const int     loopDelay        = 1;        // milliseconds to delay at end of loop if nothing else occurs
@@ -134,7 +135,6 @@ extern WiFiClient client;
 Carnival_debug     debug     = Carnival_debug();
 Carnival_network   network   = Carnival_network();
 Carnival_leds      leds      = Carnival_leds();
-//Carnival_leds      leds      = Carnival_leds(redpin, bluepin); // default is 0, 2 for an esp8266/huzzah
 
 #ifdef POOFS
   Carnival_poof    pooflib   = Carnival_poof(loopDelay);
@@ -183,25 +183,41 @@ void setup() {
    when we reach maxPoof.
 */
 void loop() {
+long   st  = micros();
+long   last= st;
+long   ths=0;
+int    i   = 0;
+String m   = "";
 
+
+
+i++; ths = micros()-st; m=m+i; m+=" -  "; m+=ths;m+="  diff:";m+=ths-last;m+="\n"; last = ths;
     network.confirmConnect();       // confirm wireless connection, socket connection
 
+i++; ths = micros()-st; m=m+i; m+=" -  "; m+=ths;m+="  diff:";m+=ths-last;m+="\n"; last = ths;
     leds.checkBlue();               // check/update led status (non-blocking)
 
+i++; ths = micros()-st; m=m+i; m+=" -  "; m+=ths;m+="  diff:";m+=ths-last;m+="\n"; last = ths;
     char* msg = network.readMsg();  // read any incoming messages
 
     if (msg && strlen(msg)>0) 
+i++; ths = micros()-st; m=m+i; m+=" -  "; m+=ths;m+="  diff:";m+=ths-last;m+="\n"; last = ths;
         processMsg(msg);            // process any 'real' incoming messages
         
 
+i++; ths = micros()-st; m=m+i; m+=" -  "; m+=ths;m+="  diff:";m+=ths-last;m+="\n"; last = ths;
     checkButtons();                 // check/update button(s) state(s)
 
 #ifdef POOFS
+i++; ths = micros()-st; m=m+i; m+=" -  "; m+=ths;m+="  diff:";m+=ths-last;m+="\n"; last = ths;
     pooflib.checkPoofing();         // check/update poofing state(s)
 #endif
 
+i++; ths = micros()-st; m=m+i; m+=" -  "; m+=ths;m+="  diff:";m+=ths-last;m+="\n"; last = ths;
     network.keepAlive();            // periodically confirm connection with messaging
 
+    if (msg && strlen(msg)>0 && DEBUG)
+        debug.Msg(m); 
     delay(loopDelay);               // time sync here? nano delay? (no, delay micro doesn't yeild)
 
 }  // end main loop
@@ -288,5 +304,6 @@ int checkButtons() {
 
    return somebutton;
 }
+
 
 
