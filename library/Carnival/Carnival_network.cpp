@@ -225,7 +225,7 @@ char* Carnival_network::readMsg() {
                   }
               } // end while client.read
 
-              leds.blinkBlue(4, 15, 1); // show communication, non-blocking
+              leds.blinkBlue(2, 15, 1); // show communication, non-blocking
 
           } // end if $ beginning of phrase
 

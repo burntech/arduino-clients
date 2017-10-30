@@ -71,7 +71,7 @@
 
 /* TURN DEBUGGING, AND / OR POOFING ON AND OFF, SET SERIAL SPEED IF DEBUGGING */
 
-const int     DEBUG            = 1;        // 1 to print useful messages to the serial port
+const int     DEBUG            = 0;        // 1 to print useful messages to the serial port
 
 #define       POOFS                      // comment out for buttons
 #define       serialSpeed      115200      // active if debugging
@@ -180,11 +180,11 @@ void loop() {
 
     char* msg = network.readMsg();  // read any incoming messages
 
-    if (msg && strlen(msg)>0) {
+    if (msg && strlen(msg)>0) 
         processMsg(msg);            // process any incoming messages
-    }
+    
 
-    int butPushed = checkButtons();                  // check button state, state change
+    checkButtons();                  // check button state, state change
 
 #ifdef POOFS
     pooflib.checkPoofing();         // check for start, stop, or still poofing         
