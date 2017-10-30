@@ -190,7 +190,8 @@ char* Carnival_network::readMsg() {
     
     // process any incoming messages
     int CA = 0;
-    char incoming[64];
+    char incoming[1024];
+    memset(incoming, NULL, 1024);
 
     if (looksgood && !wifiOverride) {
 
@@ -201,7 +202,6 @@ char* Carnival_network::readMsg() {
           // read incoming stream a phrase at a time.
           int x = 0;
           int cpst;
-          memset(incoming, NULL, 64);
           char rcvd = client.read();
 
           // read until start of phrase (clear any cruft)

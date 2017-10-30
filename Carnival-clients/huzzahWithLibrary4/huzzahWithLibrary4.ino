@@ -71,11 +71,11 @@
 
 /* TURN DEBUGGING, AND / OR POOFING ON AND OFF, SET SERIAL SPEED IF DEBUGGING */
 
-const int     DEBUG            = 0;        // 1 to print useful messages to the serial port
+const int     DEBUG            = 1;        // 1 to print useful messages to the serial port
 
 #define       POOFS                      // comment out for buttons
 #define       serialSpeed      115200      // active if debugging
-#define       WHOAMI           "BIGBETTY"         // which effect am I?
+#define       WHOAMI           "DRAGON"         // which effect am I?
 int           inputButtons[]   = {5};    // What pins are buttons on? 
                                            // (NOTE pin 2 on huzzah is blue LED)
                                            // Also, we test the first pin for wifi override
@@ -180,7 +180,7 @@ void loop() {
 
     char* msg = network.readMsg();  // read any incoming messages
 
-    if (msg) {
+    if (msg && strlen(msg)>0) {
         processMsg(msg);            // process any incoming messages
     }
 
