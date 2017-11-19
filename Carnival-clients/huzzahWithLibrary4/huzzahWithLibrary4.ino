@@ -73,7 +73,7 @@
 
 const int     DEBUG            = 0;        // 1 to print useful messages to the serial port
 
-#define       WHOAMI           "DRAGON"    // which effect am I?
+#define       WHOAMI           "AERIAL"    // which effect am I? (B=The Button, ORGAN, LULU, CAMERA - can be any string)
 #define       ESP                          // COMMENT OUT FOR ARDUINO
 #define       POOFS                        // COMMENT OUT FOR BUTTONS AND ETC&
 //#define     DNS                          // UN-COMMENT to turn off incoming signals (ie. if you're a button)
@@ -87,7 +87,7 @@ int           mySolenoids[]    = {12,13};  // pins that are solenoids (12, 13, 1
 
 extern boolean wifiOverride;               // override need of wifi: to use hold down 1st button while booting, default = 0
 #define       serialSpeed      115200      // active if debugging
-#define       DEBOUNCE         50          // minimum milliseconds between state change
+#define       DEBOUNCE         35          // minimum milliseconds between state change
 
 
 /* DONT CHANGE */

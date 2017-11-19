@@ -63,6 +63,7 @@ Carnival_network::Carnival_network()
 void Carnival_network::start(String who, bool dbug) {
     WHO    = who;
     DEBUG  = dbug;
+    wifi_set_sleep_type(NONE_SLEEP_T);
 }
 
 void Carnival_network::connectWifi(){
