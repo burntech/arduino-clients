@@ -71,21 +71,26 @@
 
 /* TURN DEBUGGING, AND / OR POOFING ON AND OFF, SET SERIAL SPEED IF DEBUGGING */
 
-const int     DEBUG            = 0;        // 1 to print useful messages to the serial port
+const int     DEBUG            = 1;        // 1 to print useful messages to the serial port
 
-#define       WHOAMI           "AERIAL"    // which effect am I? (B=The Button, ORGAN, LULU, CAMERA - can be any string)
-#define       ESP                          // COMMENT OUT FOR ARDUINO
+#define       WHOAMI           "ORGAN"    // which effect am I? (B=The Button, ORGAN, LULU, CAMERA - can be any string)
+
+
+#define       ESP8266                      // COMMENT OUT BOTH FOR ARDUINO
+//#define       ESP32                          // COMMENT OUT BOTH FOR ARDUINO
+//#define       SPARKFUN                   // uncomment if using sparkfun esp32 thing
+
 #define       POOFS                        // COMMENT OUT FOR BUTTONS AND ETC&
-//#define     DNS                          // UN-COMMENT to turn off incoming signals (ie. if you're a button)
+//#define     DNS                          // UN-COMMENT 'Do Not Signal' to turn off incoming signals (ie. if you're a button)
 
-int           inputButtons[]   = {5};      // What pins are buttons on? (5, 4 ...)
+int           inputButtons[]   = {5};      // button pins (Adafruit 8266: 5, 4 Adafruit 32: 21 Sparkfun 32: 4)
                                            // (NOTE pin 2 on huzzah is blue LED - DON'T USE)
-int           mySolenoids[]    = {12,13};  // pins that are solenoids (12, 13, 14?, A0?)
+int           mySolenoids[]    = {12,13};  // pins that are solenoids (on 8266, 12, 13, 14?, A0?)
 
 
 /* Probably don't need to change */
 
-extern boolean wifiOverride;               // override need of wifi: to use hold down 1st button while booting, default = 0
+extern boolean wifiOverride;               // override need of wifi to poof: to use hold down 1st button while booting, default = 0
 #define       serialSpeed      115200      // active if debugging
 #define       DEBOUNCE         35          // minimum milliseconds between state change
 
@@ -101,9 +106,14 @@ int           butspushed[butCount];        // state of a given button
 
 
 
-#ifdef ESP
+#ifdef ESP8266
   #include      <ESP8266WiFi.h>
 #endif
+#ifdef ESP32
+  #include      <WiFi.h>
+#endif
+
+
 
 #include      <Carnival_PW.h>              // your networking passwords file
 #include      <Carnival_network.h>         // networking library
@@ -133,8 +143,8 @@ extern WiFiClient client;
 
 Carnival_debug     debug     = Carnival_debug();
 Carnival_network   network   = Carnival_network();
-Carnival_leds      leds      = Carnival_leds();
-//Carnival_leds      leds      = Carnival_leds(redpin, bluepin); // default is 0, 2 for an esp8266/huzzah
+Carnival_leds      leds      = Carnival_leds();     // display leds (red is poofing. on 8266, blue is networking)
+
 
 #ifdef POOFS
   Carnival_poof    pooflib   = Carnival_poof(loopDelay);
@@ -152,7 +162,11 @@ void setup() {
         pooflib.setSolenoids(mySolenoids, numSolenoids);   // set relay pins to OUTPUT and turn off
     #endif
 
-    leds.startLEDS();                     // onboard LEDS
+    #ifdef SPARKFUN
+        leds.startLEDS(5,-1);             // onboard LEDS
+    #else
+        leds.startLEDS();                 // onboard LEDS
+    #endif
     initButtons();                        // set up onboard button if it exists
     debug.start(DEBUG, serialSpeed);
     network.start(WHOAMI, DEBUG);
@@ -192,7 +206,6 @@ void loop() {
 
     if (msg && strlen(msg)>0) 
         processMsg(msg);            // process any 'real' incoming messages
-        
 
     checkButtons();                 // check/update button(s) state(s)
 
@@ -290,3 +303,39 @@ int checkButtons() {
 }
 
 
+
+/* required, at least on some installations, to eliminate "impure_ptr" compilation error for ESP 32 DEV board */
+#ifdef ESP32
+void *operator new(size_t size)
+{
+    return malloc(size);
+}
+
+void *operator new[](size_t size)
+{
+    return malloc(size);
+}
+
+void operator delete(void * ptr)
+{
+    free(ptr);
+}
+
+void operator delete[](void * ptr)
+{
+    free(ptr);
+}
+
+extern "C" void __cxa_pure_virtual(void) __attribute__ ((__noreturn__));
+extern "C" void __cxa_deleted_virtual(void) __attribute__ ((__noreturn__));
+
+void __cxa_pure_virtual(void)
+{
+    abort();
+}
+
+void __cxa_deleted_virtual(void)
+{
+    abort();
+}
+#endif

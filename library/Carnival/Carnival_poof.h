@@ -25,20 +25,23 @@ class Carnival_poof
     Carnival_poof(int loopDelay);
     void setSolenoids(int aS[], int size);
 
+    // non-blocking
     void startPoof();
     void stopPoof();
     void checkPoofing();
     void doPoof(char *incoming);
-
     void poofAll(boolean state);
+
+    // blocking, fix
+    void poofStorm();  
+
+    // blocking - unused?
     void poofRight(boolean state);
     void poofRight(boolean state, int rate);  
     void poofLeft(boolean state);
     void poofLeft(boolean state, int rate);  
-    void puffRight(boolean state, int rate);
-    void puffSingleRight(int rate); 
+    void poofSingleRight(int rate); 
     void poofSingleLeft(int rate); 
-    void poofStorm();  
     void gunIt(); 
     void poofEven(int rate);  
     void poofOdd(int rate); 

@@ -11,31 +11,27 @@
 #include "WConstants.h"
 #endif
 
-// include this library's description file
 #include "Carnival_poof.h"
 #include "Carnival_debug.h"
 #include "Carnival_network.h"
 #include "Carnival_leds.h"
 
-// Constructor /////////////////////////////////////////////////////////////////
-// Function that handles the creation and setup of instances
 
 const    boolean RELAY_ON   = 0;       // opto-isolated arrays are active LOW
 const    boolean RELAY_OFF  = 1;
 
 
-int      POOFING            = 0;
-int      allSolenoids[]     = {};
-int      solenoidCount      = 0;
-int      maxPoof            = 0;       // poofer timeout after limit
+int      POOFING            = 0;       // whether we allow poofing for this sketch
+int      allSolenoids[]     = {};      // relay for all the pins that are solenoids
+int      solenoidCount      = 0;       // will be the size of the array
+int      maxPoof            = 0;       // counter while poofing, for timing out
 int      pausePoofing       = 0;       // hit max poof limit, or pause between poofs
 boolean  poofing            = 0;       // poofing state (0 is off)
 int      loopDelay          = 1;       // ms to delay each loop, default is 1 ms
 
-  /* ALLOW POOFSTORM, SET LIMITS */
-boolean POOFSTORM           = 0;       // Allow poofstorm?
-int     maxPoofLimit        = 5000;    // milliseconds to limit poof, converted to loop count
-int     poofDelay           = 2500;    // ms to delay after manual poofing to allow poof again
+boolean  POOFSTORM           = 0;      // Allow poofstorm?
+int      maxPoofLimit        = 5000;   // milliseconds to limit poof, converted to loop count
+int      poofDelay           = 2500;   // ms to delay after poofLimit expires to allow poofing again
 
 
 extern   Carnival_debug debug;
@@ -51,6 +47,7 @@ extern   long          idleTime;       // current idle time
 
 
 
+/*================= CREATION AND SETUP =================*/
 
 Carnival_poof::Carnival_poof(int LD)
 {
@@ -60,18 +57,6 @@ Carnival_poof::Carnival_poof(int LD)
         loopDelay = LD;
     }
 }
-
-// Public Methods //////////////////////////////////////////////////////////////
-// Functions available in Wiring sketches, this library, and other libraries
-
-//void Carnival::doSomething(void)
-//{
-  // even though this function is public, it can access
-  // and modify this library's private variables
-
-  // it can also call private functions of this library
-  //doSomethingSecret();
-//}
 
 
 void Carnival_poof::setSolenoids(int aS[], int size) {
@@ -86,11 +71,11 @@ void Carnival_poof::setSolenoids(int aS[], int size) {
 }
 
 
+
+
 /*================= POOF FUNCTIONS =====================*/
 
-
-
-
+/* set state to on for all solenoids */
 void Carnival_poof::startPoof() {
 
   if (pausePoofing == 0) {
@@ -105,6 +90,7 @@ void Carnival_poof::startPoof() {
 }
 
 
+/* set state to off for all solenoids */
 void Carnival_poof::stopPoof() {
     poofing = 0;
     poofAll(false);
@@ -117,31 +103,25 @@ void Carnival_poof::stopPoof() {
 
 
 
+/* check state on every loop   */
 void Carnival_poof::checkPoofing() {
 
-
-    if (pausePoofing > 0) {
-        // poofing paused, lower counter
+    if (pausePoofing > 0) {                  // poofing paused, decrement pause counter
         pausePoofing = pausePoofing - loopDelay;
-    } else if (poofing == 1) {
-        // poofing, increment max counter
+    } else if (poofing == 1) {               // poofing, increment max timer
         maxPoof = maxPoof + loopDelay;
     }
 
-
-    if (!looksgood && poofing) {
-        // stop poofing if no network connection
+    if (!looksgood && poofing) {              // stop poofing if no network connection
         stopPoof();
-    } else if (maxPoof > maxPoofLimit) {
-        // pause poofing for 'poofDelay' if we hit max pooflimit
+    } else if (maxPoof > maxPoofLimit) {      // pause poofing for 'poofDelay' if we hit max pooflimit
         pausePoofing = poofDelay;
         stopPoof();
     }
-
-
 }
 
 
+/* act on poofing message */
 void Carnival_poof::doPoof(char *incoming) {
 
     if (strcmp(incoming, "p1") == 0) {        // start / keep poofing
@@ -155,39 +135,68 @@ void Carnival_poof::doPoof(char *incoming) {
             }
         }
     } 
-
 }
 
 
 
-
-
-
-
-
-
-
+/* set state for all poofers  */
 void Carnival_poof::poofAll(boolean state) {
-  // turn on all poofers
-  for (int y = 0; y < solenoidCount; y++) {
-    if(state == true){
-      digitalWrite(allSolenoids[y], RELAY_ON);
-    }else{
-      digitalWrite(allSolenoids[y], RELAY_OFF);
+    for (int y = 0; y < solenoidCount; y++) {
+        if(state == true){
+            digitalWrite(allSolenoids[y], RELAY_ON);
+        } else {
+            digitalWrite(allSolenoids[y], RELAY_OFF);
+        }
     }
-  }
 }
+
+
+
+
+
+
+
+
+
+
+
+/*
+
+    The remaining routines are all blocking, and are not currently being used,
+    though there are hooks for POOFSTORM.
+
+*/
+
+
+void Carnival_poof::poofStorm(){  // crazy poofer display
+  debug.Msg("POOFSTORM");
+  poofAll(true);
+  delay(300);
+  poofAll(false); 
+  poofSingleLeft(200);
+  delay(50);
+  poofSingleRight(200);
+  delay(50);
+  poofLeft(true);
+  poofAll(false);
+  delay(200);
+  poofRight(true);
+  poofAll(false);
+  delay(200);
+  poofAll(true);
+  delay(600);
+  poofAll(false);
+}
+
+
+
+
+
+
+
 
 void Carnival_poof::poofRight(boolean state) {
-   for (int y = 0; y < solenoidCount; y++) {
-      if(state == true){
-        digitalWrite(allSolenoids[y], RELAY_ON);
-        delay(200);
-      }else{
-        digitalWrite(allSolenoids[y], RELAY_OFF);
-        delay(200);
-      }
-  }
+   poofRight(state,200);
 }
 
 void Carnival_poof::poofRight(boolean state, int rate) {  // overloaded function offering speed setting
@@ -203,16 +212,9 @@ void Carnival_poof::poofRight(boolean state, int rate) {  // overloaded function
   }
 }
 
+
 void Carnival_poof::poofLeft(boolean state) {
-   for (int y = solenoidCount; y == 0;  y--) {
-      if(state == true){
-        digitalWrite(allSolenoids[y], RELAY_ON);
-        delay(200);
-      }else{
-        digitalWrite(allSolenoids[y], RELAY_OFF);
-        delay(200);
-      }
-  }
+   poofLeft(state,200);
 }
 
 void Carnival_poof::poofLeft(boolean state, int rate) {  // overloaded function offering speed setting
@@ -228,20 +230,7 @@ void Carnival_poof::poofLeft(boolean state, int rate) {  // overloaded function 
   }
 }
 
-void Carnival_poof::puffRight(boolean state, int rate) {
-   if(!rate){ rate = 200;}
-   for (int y = 0; y < solenoidCount; y++) {
-      if(state == true){
-        digitalWrite(allSolenoids[y], RELAY_ON);
-        delay(rate);
-      }else{
-        digitalWrite(allSolenoids[y], RELAY_OFF);
-        delay(rate);
-      }
-  }
-}
-
-void Carnival_poof::puffSingleRight(int rate) { // briefly turn on individual poofers
+void Carnival_poof::poofSingleRight(int rate) { // briefly turn on individual poofers
    if(!rate){ rate = 200;}
    for (int y = 0; y < solenoidCount+1; y++) {
     digitalWrite(allSolenoids[y], RELAY_ON);
@@ -262,26 +251,6 @@ void Carnival_poof::poofSingleLeft(int rate) { // briefly turn on all poofers to
     }
     delay(rate);
   }
-}
-
-void Carnival_poof::poofStorm(){  // crazy poofer display
-  debug.Msg("POOFSTORM");
-  poofAll(true);
-  delay(300);
-  poofAll(false); 
-  poofSingleLeft(200);
-  delay(50);
-  puffSingleRight(200);
-  delay(50);
-  poofLeft(true);
-  poofAll(false);
-  delay(200);
-  poofRight(true);
-  poofAll(false);
-  delay(200);
-  poofAll(true);
-  delay(600);
-  poofAll(false);
 }
 
 void Carnival_poof::gunIt(){ // rev the poofer before big blast

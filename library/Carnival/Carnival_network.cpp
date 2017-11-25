@@ -3,30 +3,36 @@
   Copyright 2016 Neil Verplank.  All right reserved.
 */
 
+
 // include main library descriptions here as needed.
 #if ARDUINO >= 100
-#include "Arduino.h"
+ #include "Arduino.h"
 #else
-#include "WProgram.h"
-#include "WConstants.h"
+ #include "WProgram.h"
+ #include "WConstants.h"
 #endif
 
-#include      <ESP8266WiFi.h>
+#ifdef ESP8266
+  #include      <ESP8266WiFi.h>
+#endif
+#ifdef ESP32
+  #include      <WiFi.h>
+#endif
+
 #include      <Carnival_PW.h>
 #include      <Carnival_network.h>
 #include      <Carnival_debug.h>
 #include      <Carnival_leds.h>
 
+#ifdef ESP8266
+  extern "C" {
+    #include "gpio.h"
+  }
+  extern "C" {
+     #include "user_interface.h"
+  }
+#endif
 
-extern "C" {
-#include "gpio.h"
-}
-extern "C" {
-#include "user_interface.h"
-}
-
-const boolean ON            = LOW;     // LED ON
-const boolean OFF           = HIGH;    // LED OFF
 
 
 WiFiClient  client;
@@ -63,7 +69,13 @@ Carnival_network::Carnival_network()
 void Carnival_network::start(String who, bool dbug) {
     WHO    = who;
     DEBUG  = dbug;
+
+    /* 
+      It would seem this one line fixes all ESP8266 networking problems.
+    */
+#ifdef ESP8266
     wifi_set_sleep_type(NONE_SLEEP_T);
+#endif
 }
 
 void Carnival_network::connectWifi(){
@@ -105,7 +117,12 @@ int Carnival_network::reconnect(bool output) {
             debug.Msg(": ONLINE");
           }
        } else {
-         debug.Msg("couldn't connect to host:port");
+         if (!client) {debug.MsgPart("No client - ");}
+         if (!client.connected()) {debug.MsgPart("Not connected - ");}
+         debug.MsgPart("couldn't connect to host:port :: ");
+         debug.MsgPart(HOST);
+         debug.MsgPart(":");
+         debug.Msg(PORT);
        }
     } else { con =1; }
     if (!con) {
@@ -293,9 +310,10 @@ void Carnival_network::callServer(String who, String message){
 
 
 
-// experimental sleep routines
+// experimental sleep routines, 8266 only
 
 
+#ifdef ESP8266
 void callback() {
     debug.Msg("Woke up from sleep");
 }
@@ -315,4 +333,5 @@ void Carnival_network::sleepNow(int wakeButton) {
   connectWifi();
   reconnect(1);
 }
+#endif
 

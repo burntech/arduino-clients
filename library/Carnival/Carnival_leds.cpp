@@ -13,10 +13,20 @@
 
 #include <Carnival_leds.h>
 
-int         REDLED        = 0;       // what pin?
-int         BLUELED       = 2;       // what pin?
+#ifdef ESP8266
+int         REDLED        = 0;
+int         BLUELED       = 2;
 const       boolean ON    = LOW;     // LED ON
 const       boolean OFF   = HIGH;    // LED OFF
+#endif
+
+#ifdef ESP32
+int         REDLED        = 13;       // adafruit huzzah esp32
+int         BLUELED       = -1;       // no actual blue pin
+const       boolean ON    = HIGH;     // LED ON  // seems odd the 32 would be opposite
+const       boolean OFF   = LOW;      // LED OFF
+#endif
+
 int         blue_counter  = 0;
 int         blue_wait     = 0;
 boolean     blue_finish   = OFF;
@@ -35,17 +45,19 @@ Carnival_leds::Carnival_leds()
 
 
 void Carnival_leds::startLEDS() {
-    pinMode(REDLED, OUTPUT);           // set up LED
-    pinMode(BLUELED, OUTPUT);          // set up Blue LED
-    digitalWrite(REDLED, OFF);         // and turn it off
-    digitalWrite(BLUELED, OFF);        // and turn it off
+    startLEDS(REDLED,BLUELED);
 }
 
 void Carnival_leds::startLEDS(int red, int blue) {
-    pinMode(red, OUTPUT);           // set up LED
-    pinMode(blue, OUTPUT);          // set up Blue LED
+    REDLED  = red;
+    BLUELED = blue;
+    pinMode(REDLED, OUTPUT);           // set up LED
     digitalWrite(REDLED, OFF);         // and turn it off
+#ifdef ESP32
+#else
+    pinMode(BLUELED, OUTPUT);          // set up Blue LED
     digitalWrite(BLUELED, OFF);        // and turn it off
+#endif
 }
 
 int Carnival_leds::redPin() {
@@ -59,6 +71,9 @@ int Carnival_leds::bluePin() {
 // we pass in 1 for light on, 0 for light off,
 // but digital pins are on when low....
 void Carnival_leds::setLED(int ledpin, bool state) {
+#ifdef ESP32
+    return;
+#endif
     if (state==1) { state = ON; }
     else {state = OFF;}
     digitalWrite(ledpin,state);
@@ -76,6 +91,9 @@ void Carnival_leds::setRedLED(bool state) {
 
 // blocking
 void Carnival_leds::flashLED(int whichLED, int times, int rate, bool finish){
+#ifdef ESP32
+    return;
+#endif
   // flash `times` at a `rate` and `finish` in which state
   for(int i = 0;i <= times ;i++){
     digitalWrite(whichLED, finish);
@@ -93,6 +111,9 @@ void Carnival_leds::flashLED(int whichLED, int times, int rate, bool finish){
 // non-blocking blinking of LED
 // needs significant modification to handle both leds....
 void Carnival_leds::blinkBlue(int times, int wait, bool finish) {
+#ifdef ESP32
+    return;
+#endif
   
     bool endstate = OFF;
     if (finish==1) { endstate = ON; }
@@ -105,6 +126,9 @@ void Carnival_leds::blinkBlue(int times, int wait, bool finish) {
 }
   
 void Carnival_leds::checkBlue() {
+#ifdef ESP32
+    return;
+#endif
     if (blue_counter > 0 || blue_state != blue_finish) {
       
         current_time = millis();
