@@ -145,7 +145,7 @@ Carnival_neopx     neopx     = Carnival_neopx();
 //---NEOP
 
 /*
- * Current Possible Chipsets:
+ * Current Possible FastLED Chipsets:
  * APA102, APA104, DOTSTAR, GW6205, GW6205_400, LPD8806, NEOPIXEL, P9813, SM16716, TM1803, TM1804, TM1809, WS2801, WS2811, WS2812, WS2812B, WS2811_400, UCS1903, UCS1903B
 */
 

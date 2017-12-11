@@ -31,6 +31,9 @@ class Carnival_network
     boolean OK();
     void    printWifiStatus();
     void    connectWifi();
+    void    set_override(boolean wf_over_ride);
+    void    check_override(int test);
+    boolean get_override();
     char*   readMsg();
     void    callServer(String who, String message);
     void    callServer(String message);

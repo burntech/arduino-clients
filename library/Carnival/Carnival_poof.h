@@ -17,49 +17,40 @@
 #include "WString.h"
 
 
+#include "Carnival_events.h"
+
 // library interface description
 class Carnival_poof
 {
   // user-accessible "public" interface
   public:
-    Carnival_poof(int loopDelay);
+    Carnival_poof();
     void setSolenoids(int aS[], int size);
+    void set_kill(int state);
+    int  get_kill();
+    void set_kill_remote(int state);
+    int  get_kill_remote();
 
     // non-blocking
     void startPoof();
+    void startPoof(int sols[], int size);
     void stopPoof();
+    void stopPoof(int sols[], int size);
     void checkPoofing();
-    void doPoof(char *incoming);
+    void checkPoofing(int sols[], int size);
+    event_t *doPoof(char *incoming);
     void poofAll(boolean state);
+    void poofAll(boolean state, int sols[], int size);
 
-    // blocking, fix
-    void poofStorm();  
+    // timed sequences
+    event_t *poofStorm();  
+    event_t *poof_across(boolean state, int rate, long int *st_time, int dir);  
+    event_t *gunIt(long int *st_time); 
+    event_t *poof_alt(int rate, long int *st_time, int dir);
+    event_t *poofChooChoo(int start, int decrement, int rounds, long int *st_time); 
 
-    // blocking - unused?
-    void poofRight(boolean state);
-    void poofRight(boolean state, int rate);  
-    void poofLeft(boolean state);
-    void poofLeft(boolean state, int rate);  
-    void poofSingleRight(int rate); 
-    void poofSingleLeft(int rate); 
-    void gunIt(); 
-    void poofEven(int rate);  
-    void poofOdd(int rate); 
-    void lokiChooChoo(int start, int decrement, int rounds); 
-
-  // library-accessible "private" interface
-//  private:
-//    int value;
-//    void doSomethingSecret(void);
+  private:
+    int get_relays(char *str, int *relays);
 };
 
 #endif
-
-
-/*================= POOF FUNCTIONS =====================*/
-
-
-// Private Methods /////////////////////////////////////////////////////////////
-// Functions only available to other functions in this library
-
-//void Carnival::doSomethingSecret(void) { }

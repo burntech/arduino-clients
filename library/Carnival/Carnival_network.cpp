@@ -14,8 +14,7 @@
 
 #ifdef ESP8266
   #include      <ESP8266WiFi.h>
-#endif
-#ifdef ESP32
+#else // ESP32
   #include      <WiFi.h>
 #endif
 
@@ -47,12 +46,11 @@ boolean     DEBUG           = 1;
 
 const String  KEEPALIVE        = "KA";     // signal sent to server to maintain socket
 int           looksgood        = 0;        // still connected (0 is not)
-long          stillOnline      = 0L;        // Check for connection timeout every 5 minutes
-long          onlineMsg        = 60000L;    // ms to delay between "still online" flashes
+long          onlineMsg        = 60000L;   // ms to delay between "still online" flashes
 long          idleTime         = 0L;       // current idle time
 long          maxIdle          = 300000L;  // milliseconds network idle before keep alive signal (5 minutes)
-boolean       wifiOverride     = false;    // don't allow poofing without server connection by default
-
+boolean       WIFI_OVERRIDE     = false;    // don't allow poofing without server connection by default
+long          last_checked     = 0L;       // last time we checked wifi connection
 
 extern Carnival_debug debug;
 extern Carnival_leds leds;
@@ -85,7 +83,6 @@ void Carnival_network::connectWifi(){
 
   if ( WiFi.status() != WL_CONNECTED) {
 
-// This may be required for lower power consumption.  unconfirmed.
         WiFi.mode(WIFI_STA);
         status = WiFi.begin(ssid, pass);  // connect to network
         // flash and wait 10 seconds for connection:
@@ -141,18 +138,24 @@ int Carnival_network::reconnect(bool output) {
 
 
 void Carnival_network::confirmConnect() {
-  if (!wifiOverride) {
-    // CONFIRM CONNECTION
-    looksgood = reconnect(0);
-    stillOnline++;
-    if (stillOnline >= onlineMsg) {
-      looksgood = reconnect(1);
-      if (looksgood) {
-        printWifiStatus();
-        stillOnline = 0;
-      }
+
+    if (!WIFI_OVERRIDE) {
+
+        int time = millis();
+
+        // CONFIRM CONNECTION
+        looksgood   = reconnect(0);
+
+        if (time - last_checked >= onlineMsg) {
+            looksgood = reconnect(1);
+            if (looksgood) {
+                printWifiStatus();
+            }
+            last_checked = time;
+        }
+
+        keepAlive();
     }
-  }
 }
 
 
@@ -160,7 +163,7 @@ void Carnival_network::confirmConnect() {
 
 void Carnival_network::keepAlive() {
   long cTime = millis();
-  if ((cTime - idleTime) > maxIdle) {
+  if ((cTime - idleTime) >= maxIdle) {
       callServer(KEEPALIVE);
       idleTime = cTime;
       debug.Msg("sending keep alive");
@@ -171,10 +174,31 @@ void Carnival_network::keepAlive() {
 
 
 boolean Carnival_network::OK() {
-    if ((looksgood && stillOnline) || wifiOverride) { return true; }
+    if (looksgood || WIFI_OVERRIDE) { return true; }
     return false;
 }
 
+
+
+
+void Carnival_network::set_override(boolean wf_over_ride) {
+    WIFI_OVERRIDE = wf_over_ride;
+}
+
+boolean Carnival_network::get_override() {
+    return WIFI_OVERRIDE;
+}
+
+/* check wireless override (hold down button #1 while booting) */
+void Carnival_network::check_override(int test){
+    if (!get_override()) {
+        // if it's the first button and it's pushed set override = true
+        if (test == LOW) {
+            // if the button is held down when booting, we're in wifi override mode.
+            set_override(true);
+        }
+    }  
+}
 
 
 
@@ -207,7 +231,7 @@ char* Carnival_network::readMsg() {
     char incoming[1024];
     memset(incoming, NULL, 1024);
 
-    if (looksgood && !wifiOverride) {
+    if (looksgood && !WIFI_OVERRIDE) {
 
         CA =  client.available();
         if (CA) {
@@ -256,9 +280,14 @@ char* Carnival_network::readMsg() {
 
 
 
-// send a well-formatted message to the server
-// looks like "WHOMAI:some message:[optional data]"
+/* 
+    Send a well-formatted message to the server.
+    Looks like "WHOMAI:some message:[optional data string][:][second optional data string]".
 
+    Here, we over override the basic function to allow the passing of different types
+    types of data, and/or optional data.
+
+*/
 void Carnival_network::callServer(String message){
     callServer(WHO,message);
 }
@@ -295,7 +324,7 @@ void Carnival_network::callServer(String who, int message, int optdata){
 
 void Carnival_network::callServer(String who, String message){
  
-    if (!OK()) { return; }
+    if (!OK()) { return; }   // don't send message if no connection
  
     String out = who;
     out += ":";
@@ -312,7 +341,6 @@ void Carnival_network::callServer(String who, String message){
 
 // experimental sleep routines, 8266 only
 
-
 #ifdef ESP8266
 void callback() {
     debug.Msg("Woke up from sleep");
@@ -327,11 +355,12 @@ void Carnival_network::sleepNow(int wakeButton) {
   wifi_fpm_set_sleep_type(LIGHT_SLEEP_T); //light sleep mode
   gpio_pin_wakeup_enable(GPIO_ID_PIN(wakeButton), GPIO_PIN_INTR_LOLEVEL); //set the interrupt to look for LOW pulses on pin. 
   wifi_fpm_open();
-  wifi_fpm_set_wakeup_cb(callback); //wakeup callback
-  wifi_fpm_do_sleep(0xFFFFFFF); 
-  delay(100); 
-  connectWifi();
-  reconnect(1);
+  wifi_fpm_set_wakeup_cb(callback); // set wakeup callback function
+  wifi_fpm_do_sleep(0xFFFFFFF);     // go to sleep.....
+  delay(100);                       // allow sleep to settle
+                                    
+  connectWifi();                    // upon wake-up, resume wifi
+  reconnect(1);                     // re-connect socket
 }
 #endif
 
