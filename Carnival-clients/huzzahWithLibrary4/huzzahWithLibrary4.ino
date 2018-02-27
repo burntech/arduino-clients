@@ -24,10 +24,12 @@
     You should have received a copy of the GNU General Public License
     along with The Carnival.  If not, see <http://www.gnu.org/licenses/>.
 
+    Depressing the poofer button overrides the wireless server requirement.
+
 */
 
 /* determine size of an allocated array */
-#define NUM_ELS(x)  (sizeof(x) / sizeof((x)[0]))
+#define NUM_ELS(x)  (sizeof(x) / sizeof(x[0]))
 
 
 
@@ -40,11 +42,11 @@
 
 */
 
-#define       WHOAMI           "SIDESHOW"  // which effect am I? (B=The Button, ORGAN, LULU, CAMERA - can be any string)
+#define       WHOAMI           "ORGAN"  // which effect am I? (B=The Button, ORGAN, LULU, CAMERA - can be any string)
 
-const int     DEBUG            = 1;        // 1 to turn serial on and print useful (ha!) messages
+const int     DEBUG            = 0;        // 1 to turn serial on and print useful (ha!) messages
 
-#define       ESP8266                      // comment out if using an ESP32 of any kind (and change your board definition!)
+//#define       ESP8266                      // comment out if using an ESP32 of any kind
 
 #ifndef ESP8266
   #define       ESP32                      // comment out 8266 above to use Adafruit-style ESP32
@@ -53,8 +55,6 @@ const int     DEBUG            = 1;        // 1 to turn serial on and print usef
 
 #define       POOFS                        // COMMENT OUT FOR BUTTONS AND ETC&
 //#define     DNS                          // UN-COMMENT 'Do Not Signal' to turn off incoming signals (ie. if you're a button)
-
-//#define       NEOPX  // not actually working....
 
 
 /* 
@@ -85,9 +85,9 @@ const int     DEBUG            = 1;        // 1 to turn serial on and print usef
  
 
 #ifdef ESP8266 // Adafruit Huzzah ESP8266 and similar, possibly NodeMCU
-      int       killSwitch       = 4;              // 4 - kill switch
-      int       inputButtons[]   = {5};            // 5 - poof button(s) 
-      int       mySolenoids[]    = {12,13,14,16};  // 12,13,14,16 - poofer relay(s)
+      int       killSwitch       = 0;              // 4 - kill switch
+      int       inputButtons[]   = {};            // 5 - poof button(s) 
+      int       mySolenoids[]    = {};  // 12,13,14,16 - poofer relay(s)
       int       allAnalog[]      = {};             // A0 - don't set if nothing on the pin
 #else
   #ifdef ESP32
@@ -159,10 +159,6 @@ int           KILL_SWITCH           = 0;   // local kill-state
 #ifdef POOFS
   #include    <Carnival_poof.h>            // poofer library
 #endif
-#ifdef NEOPX
-  #include    <Carnival_neopx.h>           // neopixel library
-  #include    <FastLED.h>
-#endif
 
 Carnival_debug     debug     = Carnival_debug();
 Carnival_network   network   = Carnival_network();
@@ -170,9 +166,6 @@ Carnival_leds      leds      = Carnival_leds();     // display leds (red is poof
 Carnival_events    events    = Carnival_events();
 #ifdef POOFS
   Carnival_poof    pooflib   = Carnival_poof();
-#endif
-#ifdef NEOPX
-  Carnival_neopx   neopixel  = Carnival_neopx();
 #endif
 
 
@@ -227,7 +220,6 @@ void loop() {
 
     network.confirmConnect();         // confirm wireless connection, socket connection
     leds.checkBlue();                 // check/update led status (non-blocking)
-    my_events = checkKill(my_events); // check kill switch / kill state
     checkButtons();                   // check/update button(s) state(s)
     readAnalog();                     // check readings on analog pins
 
@@ -242,9 +234,12 @@ void loop() {
         my_events = processMsg(msg, my_events);
         debug.Msg(msg);
     }
-  #ifdef POOFS
-    pooflib.checkPoofing();           // check/update poofing state(s)
-  #endif
+
+    my_events = checkKill(my_events); // check kill switch / kill state, clean events if needed
+
+    #ifdef POOFS
+      pooflib.checkPoofing();         // check/update poofing state(s)
+    #endif
 
     yield();                          // give wireless time to do its thing (~100uSec on avg?)
 
@@ -252,9 +247,14 @@ void loop() {
 
 
 
+void initButtons() {
+    initButtons(0);
+}
+
+
 
 /* initialize any button pins and button states */
-void initButtons() {
+void initButtons(boolean wireless_override) {
 
     if (killSwitch) {
         pinMode(killSwitch, INPUT_PULLUP);  // connect internal pull-up
@@ -264,9 +264,12 @@ void initButtons() {
     for (int x = 0; x < button_count; x++) {
         pinMode(inputButtons[x], INPUT_PULLUP);
         digitalWrite(inputButtons[x], HIGH); 
-        button_state[x] = false;
-        if (x==0) 
-            network.check_override(digitalRead(inputButtons[0]));
+        button_state[x] = false;       
+        if (x==0)
+            if (wireless_override)
+                network.check_override(LOW);
+            else
+                network.check_override(digitalRead(inputButtons[0]));
     }   
 }
 
@@ -279,8 +282,8 @@ void initAnalog() {
 #ifdef ESP32
 // not sure if we need to do this, or if using the Arduino IDE, 
 // this is set by default?
-//    analogReadResolution(12);       // 12 bits of precision
-//    analogSetAttenuation(ADC_0db);  // For all pins
+    analogReadResolution(12);        // 12 bits of precision
+    analogSetAttenuation(ADC_11db);  // Use 3.3 V For all pins
 #endif
     for (int x = 0; x < adc_count; x++) {
         pinMode(allAnalog[x], INPUT);
@@ -351,7 +354,8 @@ int checkButtons() {
                     somebutton      = button_number;
                     lastButsChgd[x] = now;
                   #ifdef POOFS
-                    pooflib.startPoof();
+                    if (x==0)
+                      pooflib.startPoof();
                   #endif
                     network.callServer(button_number,1);
                 }
@@ -361,7 +365,8 @@ int checkButtons() {
                     button_state[x] = false;
                     lastButsChgd[x] = now;
                   #ifdef POOFS
-                    pooflib.stopPoof();
+                    if (x==0)
+                      pooflib.stopPoof();
                   #endif
                     network.callServer(button_number,0);
                 }
@@ -416,13 +421,14 @@ void readAnalog() {
     int reading;
     for (int x = 0; x < adc_count; x++) {
         reading = analogRead(allAnalog[x]);
-        if (reading > 0) {
+        if (reading != adc_reading[x]) {
            debug.MsgPart("Threshold reading: ");
            debug.MsgPart(reading);
+           debug.MsgPart("  ");
+           debug.Msg(allAnalog[x]);           
+           adc_reading[x] = reading;
         }
-        adc_reading[x] = reading;
     }
-    if (reading > 0) { debug.Msg(" "); }
 }
 
 

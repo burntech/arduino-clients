@@ -41,6 +41,7 @@ class Carnival_poof
     event_t *doPoof(char *incoming);
     void poofAll(boolean state);
     void poofAll(boolean state, int sols[], int size);
+    boolean isPoofing(int whichSolenoid);
 
     // timed sequences
     event_t *poofStorm();  
@@ -50,7 +51,7 @@ class Carnival_poof
     event_t *poofChooChoo(int start, int decrement, int rounds, long int *st_time); 
 
   private:
-    int get_relays(char *str, int *relays);
+    int get_relays(char *str, int *relays, int *binary, int *relays_off, int *num_relays_off);
 };
 
 #endif

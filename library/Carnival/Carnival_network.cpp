@@ -49,8 +49,9 @@ int           looksgood        = 0;        // still connected (0 is not)
 long          onlineMsg        = 60000L;   // ms to delay between "still online" flashes
 long          idleTime         = 0L;       // current idle time
 long          maxIdle          = 300000L;  // milliseconds network idle before keep alive signal (5 minutes)
-boolean       WIFI_OVERRIDE     = false;    // don't allow poofing without server connection by default
+boolean       WIFI_OVERRIDE    = false;    // don't allow poofing without server connection by default
 long          last_checked     = 0L;       // last time we checked wifi connection
+int           reconnections    = 0;        // how many times we've tried
 
 extern Carnival_debug debug;
 extern Carnival_leds leds;
@@ -77,6 +78,8 @@ void Carnival_network::start(String who, bool dbug) {
 }
 
 void Carnival_network::connectWifi(){
+
+  if (WIFI_OVERRIDE) return;
 
   debug.MsgPart("Attempting to connect to SSID: ");
   debug.Msg(ssid);
@@ -113,7 +116,16 @@ int Carnival_network::reconnect(bool output) {
             debug.MsgPart(WHO);
             debug.Msg(": ONLINE");
           }
+          reconnections = 0;
        } else {
+          reconnections++;
+         #ifdef ESP32
+           if (reconnections > 5) {
+             // massive workaround - ESP only connects 50% of time.
+             // see https://github.com/espressif/arduino-esp32/issues/234
+             ESP.restart();
+           }
+         #endif
          if (!client) {debug.MsgPart("No client - ");}
          if (!client.connected()) {debug.MsgPart("Not connected - ");}
          debug.MsgPart("couldn't connect to host:port :: ");
@@ -196,6 +208,7 @@ void Carnival_network::check_override(int test){
         if (test == LOW) {
             // if the button is held down when booting, we're in wifi override mode.
             set_override(true);
+            debug.Msg("Wireless override - engaged!");
         }
     }  
 }
@@ -228,7 +241,7 @@ char* Carnival_network::readMsg() {
     
     // process any incoming messages
     int CA = 0;
-    char incoming[1024];
+    char incoming[1024]; // should we be passing in a chunk of memory??
     memset(incoming, NULL, 1024);
 
     if (looksgood && !WIFI_OVERRIDE) {
@@ -255,6 +268,7 @@ char* Carnival_network::readMsg() {
                   if (rcvd == '%') { /* end of phrase - do something */
 
                       debug.Msg(incoming);
+// hey, what if there's another message?
                       break; // phrase read, end loop
 
                   } else { // not the end of the phrase
@@ -329,7 +343,8 @@ void Carnival_network::callServer(String who, String message){
     String out = who;
     out += ":";
     out += message;
-
+// NEED to pre- post-pend $/% to each message....
+//    out = "$" + out + "%";
     client.println(out);
     leds.blinkBlue(3, 10, 1); // show communication
     debug.MsgPart(who);

@@ -87,7 +87,7 @@ event_t *Carnival_events::check_events(event_t *events, long seq_start, char **m
 
         if ( now >= (seq_start + this_event->begin) && !this_event->started ) {
             // begin action (return message)
-            *msg = this_event->action;
+            *msg = strdup(this_event->action);
             this_event->started = 1;
             this_event = NULL;  // we skip to the end to process on this message
         } else if ( now >= (seq_start + this_event->begin + this_event->length) ) {
@@ -111,6 +111,7 @@ event_t *Carnival_events::check_events(event_t *events, long seq_start, char **m
             } else {
                 last_event = this_event;
                 this_event = this_event->next;
+
             }
         }
     }
@@ -127,7 +128,6 @@ event_t *Carnival_events::check_events(event_t *events, long seq_start, char **m
 event_t *Carnival_events::concat_events(event_t *first_event, event_t *second_event) {
 
     event_t *current = NULL;
-
     if (!first_event)  return second_event;
     if (!second_event) return first_event;
     for (current=first_event; current->next !=NULL; current=current->next);

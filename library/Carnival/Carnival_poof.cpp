@@ -56,7 +56,7 @@ int      maxPoof[MAX_SOLS];            // counter while poofing, for timing out
 int      pausePoofing[MAX_SOLS];       // hit max poof limit, or pause between poofs
 boolean  poofing[MAX_SOLS];            // poofing state (0 is off)
 
-int      maxPoofLimit        = 8000;   // milliseconds to limit poof, converted to loop count
+int      maxPoofLimit        = 6000;   // milliseconds to limit poof, converted to loop count
 int      poofDelay           = 2500;   // ms to delay after poofLimit expires to allow poofing again
 
 extern   Carnival_debug debug;
@@ -64,12 +64,6 @@ extern   Carnival_network network;
 extern   Carnival_leds leds;
 extern   Carnival_events events;
 
-
-
-// from networking
-extern   boolean       WIFI_OVERRIDE;  // override need of wifi to use button by holding down button while booting.
-extern   int           looksgood;      // still connected (0 is not)
-extern   long          idleTime;       // current idle time
 
 
 
@@ -127,6 +121,13 @@ int Carnival_poof::get_kill_remote() {
 
 
 /*================= POOF FUNCTIONS =====================*/
+
+
+/* return state for a given solenoids */
+boolean Carnival_poof::isPoofing(int whichSolenoid) {
+    return poofing[whichSolenoid];
+}
+
 
 /* set state to on for all solenoids */
 void Carnival_poof::startPoof() {
@@ -216,7 +217,7 @@ void Carnival_poof::checkPoofing() {
             maxPoof[i] = maxPoof[i] + time;
         }
 
-        if (!looksgood && poofing[i]) {              // stop poofing if no network connection
+        if (poofing[i] && !network.OK()) {          // stop poofing if no network connection
             new_sols[new_stops] = i+1;
             new_stops++;
         } else if (maxPoof[i] > maxPoofLimit) {      // pause poofing for 'poofDelay' if we hit max pooflimit
@@ -243,13 +244,24 @@ event_t *Carnival_poof::doPoof(char *incoming) {
       p1 - poof all
       p2 - start poofstorm
       p1>3,5,7 = start poof on relay number 3, 5, and 7
+
+      p>>nnn where 'nnn' is a number from 0 to 65,536
+        In this case, it's (up to ) a 16-bit sequence, where the low-order
+        bit is the first relay, and the nth bit would the nth relay,
+        and that bit being set means poof-on.
+
+        I.e., 100110001110 means 12th relay on, 11, 10 off, 9-8 on...
+        relay 1 off.  Which is 2446 decimal.
+
     */
     int num_relays = 0;
+    int num_relays_off = 0;
     int tot_chars  = strlen(incoming);
-    int relays[tot_chars];
+    int relays[tot_chars], relays_off[tot_chars];
+    int binary;
 
     if (tot_chars > 2 and incoming[2]=='>') {
-        num_relays = get_relays(incoming, relays);
+        num_relays = get_relays(incoming, relays, &binary, relays_off, &num_relays_off);
     }
 
     event_t *new_events;
@@ -258,17 +270,21 @@ event_t *Carnival_poof::doPoof(char *incoming) {
     if (incoming[1] == '1') {          // p1, start / keep poofing ALL
         if (num_relays) 
             startPoof(relays, num_relays);
-        else
-            startPoof();
+        else 
+            startPoof(); 
     } else if (incoming[1] == '0') {   // p0, stop poofing ALL
         if (num_relays)
             stopPoof(relays, num_relays);
         else 
             stopPoof();
     } else if (incoming[1] == '2') {   // p2, poofstorm if allowed and still poofing
-        if (pausePoofing[0] == 0) {
+        if (pausePoofing[0] == 0) 
             new_events = poofStorm();
-        }
+    } else if (binary) {
+        if (num_relays)
+            startPoof(relays, num_relays);
+        if (num_relays_off)
+            stopPoof(relays_off, num_relays_off);
     } 
 
     return new_events;
@@ -305,31 +321,65 @@ void Carnival_poof::poofAll(boolean state, int sols[], int size) {
 
 
 /* find an array of relays if specified in string */
-int Carnival_poof::get_relays(char *incoming, int *relays) {
+int Carnival_poof::get_relays(char *incoming, int *relays, int *binary, int *relays_off, int *num_relays_off) {
     /*
        string looks like: "p1>1,2,6,7"
        so we skip 3 characters, then find #'s between commas,
        fill an array via a pointer, and return its size.
 
        Some error-checking would likely be wise.
+
+       p>>nnnn
     */
+
+
     int num_relays = 0;
     int NUMLEN     = strlen(incoming);
     int cur_let    = 3;
+
+    if (incoming[1] == '>') {
+        *binary = 1;
+    }
+
     while (cur_let < NUMLEN) {
         int cur_num = 0;
+        int cur_off_num = 0;
         int accum   = 0;
         while (incoming[cur_let+cur_num] != ',' && cur_let+cur_num < NUMLEN) {
             accum = 10*accum;
             accum += (incoming[cur_num+cur_let]-0x30);
             cur_num++;
         }
-        // should range from 1..solenoidCount, no more
-        if (accum && accum<=solenoidCount) {
-            relays[num_relays] = accum;
-            num_relays++;
+
+        if (binary) {
+            int count = solenoidCount;
+            while (count > 0) {
+
+                int byte = pow(2,count-1);
+                if (accum >= byte) {
+                    relays[cur_num] = count;
+                    accum = accum - byte;
+                    cur_num++;
+                } else {
+                    relays_off[cur_off_num] = count;
+                    cur_off_num++;
+                }
+                count--;
+            }
+
+            *num_relays_off = cur_off_num;
+            num_relays     = cur_num;
+            cur_let = NUMLEN;
+
+        } else {
+
+            // should range from 1..solenoidCount, no more
+            if (accum && accum<=solenoidCount) {
+                relays[num_relays] = accum;
+                num_relays++;
+            }
+            cur_let += cur_num+1;
         }
-        cur_let += cur_num+1;
     }
 
     return num_relays;
@@ -398,14 +448,6 @@ event_t *Carnival_poof::poofStorm() {
     curtime += 4*delay_time;
     str = "p0";
     new_event = events.new_event(str,curtime,0);
-    poofstorm = events.concat_events(poofstorm,new_event);
-
-
-
-// testing
-
-
-    new_event = Carnival_poof::poofChooChoo(100,10,4,&curtime);
     poofstorm = events.concat_events(poofstorm,new_event);
 
     return poofstorm;
