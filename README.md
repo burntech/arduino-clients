@@ -16,7 +16,7 @@ or renamed) connect to the BurnTech network provided by the [burntech rPi image]
 (https://github.com/burntech/burntech-image/)
 
 3) To get best results at this point, you should be using at least the ESP 
-core 2.3.0, better still is using the current version on github:
+core 2.4.0, better still is using the current version on github:
 
 [https://github.com/esp8266/Arduino](https://github.com/esp8266/Arduino)
 

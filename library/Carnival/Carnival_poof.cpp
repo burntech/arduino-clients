@@ -56,7 +56,7 @@ int      maxPoof[MAX_SOLS];            // counter while poofing, for timing out
 int      pausePoofing[MAX_SOLS];       // hit max poof limit, or pause between poofs
 boolean  poofing[MAX_SOLS];            // poofing state (0 is off)
 
-int      maxPoofLimit        = 6000;   // milliseconds to limit poof, converted to loop count
+int      maxPoofLimit        = 6000;   // milliseconds to limit poof, converted to loop count (can pass in new limit at creation)
 int      poofDelay           = 2500;   // ms to delay after poofLimit expires to allow poofing again
 
 extern   Carnival_debug debug;
@@ -75,6 +75,13 @@ Carnival_poof::Carnival_poof()
     POOFING_ALLOWED=1;
 }
 
+Carnival_poof::Carnival_poof(long poof_limit, long poof_delay)
+{
+    // initialize this instance's variables
+    POOFING_ALLOWED=1;
+    maxPoofLimit = poof_limit;
+    poofDelay    = poof_delay;
+}
 
 /* initalize our solenoid array with pins, set definite size */
 void Carnival_poof::setSolenoids(int aS[], int size) {
@@ -211,16 +218,17 @@ void Carnival_poof::checkPoofing() {
 
     int i;
     for (i=0; i<solenoidCount; i++) {
-        if (pausePoofing[i] > 0) {                  // poofing paused, decrement pause counter
+        if (pausePoofing[i] > 0) {                          // poofing paused, decrement pause counter
             pausePoofing[i] = pausePoofing[i] - time;
-        } else if (poofing[i] == 1) {               // poofing, increment max timer
+            if (pausePoofing[i] < 0) pausePoofing[i] = 0;   // we test for return to zero, so must not be negative.
+        } else if (poofing[i] == 1) {                       // poofing, increment max timer
             maxPoof[i] = maxPoof[i] + time;
         }
 
-        if (poofing[i] && !network.OK()) {          // stop poofing if no network connection
+        if (poofing[i] && !network.OK()) {                  // stop poofing if no network connection (not if WIFI override)
             new_sols[new_stops] = i+1;
             new_stops++;
-        } else if (maxPoof[i] > maxPoofLimit) {      // pause poofing for 'poofDelay' if we hit max pooflimit
+        } else if (maxPoof[i] > maxPoofLimit) {             // pause poofing for 'poofDelay' if we hit max pooflimit
             pausePoofing[i] = poofDelay;
             new_sols[new_stops] = i+1;
             new_stops++;

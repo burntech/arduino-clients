@@ -1,4 +1,4 @@
-const char    ssid[]         =  "BurnTect";
+const char    ssid[]         =  "BurnTech";
 const char    pass[]         =  "Password!";
 #define       HOST           "192.168.10.1"
 #define       PORT           5061

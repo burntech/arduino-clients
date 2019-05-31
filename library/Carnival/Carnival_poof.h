@@ -25,6 +25,7 @@ class Carnival_poof
   // user-accessible "public" interface
   public:
     Carnival_poof();
+    Carnival_poof(long poof_limit, long poof_delay);
     void setSolenoids(int aS[], int size);
     void set_kill(int state);
     int  get_kill();

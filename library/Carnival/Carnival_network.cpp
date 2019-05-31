@@ -1,6 +1,18 @@
 /*
   Carnival_network.cpp - Carnival library
   Copyright 2016 Neil Verplank.  All right reserved.
+
+I will confirm that the bug exists for me as well on a NodeMCU 1.0, using the Arduino IDE with the esp8266 board library installed.
+
+## possible workaround for disconnecting....
+
+I used this workaround and it is working now:
+
+WiFi.persistent(false);
+WiFi.mode(WIFI_OFF);   // this is a temporary line, to be removed after SDK update to 1.5.4
+WiFi.mode(WIFI_STA);
+WiFi.begin(ssid, password);
+
 */
 
 
@@ -71,6 +83,10 @@ void Carnival_network::start(String who, bool dbug) {
 
     /* 
       It would seem this one line fixes all ESP8266 networking problems.
+      Note that technically this is not the default mode (which is to sleep
+      and wake up), and that in theory this could cause overheating.
+
+      See https://github.com/esp8266/Arduino/issues/2330
     */
 #ifdef ESP8266
     wifi_set_sleep_type(NONE_SLEEP_T);

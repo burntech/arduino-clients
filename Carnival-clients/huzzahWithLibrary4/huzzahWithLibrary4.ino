@@ -2,7 +2,7 @@
 
     ESP XC-Client
 
-    Copyright 2016, 2017 - Neil Verplank (neil@capnnemosflamingcarnival.org)
+    Copyright 2016, 2017, 2018 - Neil Verplank (neil@capnnemosflamingcarnival.org)
 
     This file is part of The Carnival.  See README.md for more detail.
 
@@ -42,11 +42,11 @@
 
 */
 
-#define       WHOAMI           "ORGAN"  // which effect am I? (B=The Button, ORGAN, LULU, CAMERA - can be any string)
+#define       WHOAMI           "BIGBETTY"  // which effect am I? (B=The Button, ORGAN, LULU, CAMERA - can be any string)
 
-const int     DEBUG            = 0;        // 1 to turn serial on and print useful (ha!) messages
+const int     DEBUG            = 1;        // 1 to turn serial on and print useful (ha!) messages
 
-//#define       ESP8266                      // comment out if using an ESP32 of any kind
+#define       ESP8266                      // comment out if using an ESP32 of any kind
 
 #ifndef ESP8266
   #define       ESP32                      // comment out 8266 above to use Adafruit-style ESP32
@@ -85,9 +85,9 @@ const int     DEBUG            = 0;        // 1 to turn serial on and print usef
  
 
 #ifdef ESP8266 // Adafruit Huzzah ESP8266 and similar, possibly NodeMCU
-      int       killSwitch       = 0;              // 4 - kill switch
-      int       inputButtons[]   = {};            // 5 - poof button(s) 
-      int       mySolenoids[]    = {};  // 12,13,14,16 - poofer relay(s)
+      int       killSwitch       = 0;              // should be 4 - kill switch
+      int       inputButtons[]   = {5};            // should be 5 - poof button(s) 
+      int       mySolenoids[]    = {12,13};  // 12,13,14,16 - poofer relay(s)
       int       allAnalog[]      = {};             // A0 - don't set if nothing on the pin
 #else
   #ifdef ESP32
@@ -178,6 +178,8 @@ long           seq_start  = 0L;             // start time for timed sequence
 
 void setup() {
 
+    debug.start(DEBUG, SERIAL_SPEED);
+
     #ifdef POOFS
         pooflib.setSolenoids(mySolenoids, numSolenoids);
     #endif
@@ -188,7 +190,8 @@ void setup() {
     #endif
     initButtons();
     initAnalog();
-    debug.start(DEBUG, SERIAL_SPEED);
+
+    
     network.start(WHOAMI, DEBUG);
     network.connectWifi();
     network.confirmConnect();
@@ -260,16 +263,17 @@ void initButtons(boolean wireless_override) {
         pinMode(killSwitch, INPUT_PULLUP);  // connect internal pull-up
         digitalWrite(killSwitch, HIGH); 
     }
-    
     for (int x = 0; x < button_count; x++) {
         pinMode(inputButtons[x], INPUT_PULLUP);
-        digitalWrite(inputButtons[x], HIGH); 
         button_state[x] = false;       
         if (x==0)
             if (wireless_override)
                 network.check_override(LOW);
             else
                 network.check_override(digitalRead(inputButtons[0]));
+        // now turn off button state
+        digitalWrite(inputButtons[x], HIGH); 
+    
     }   
 }
 
