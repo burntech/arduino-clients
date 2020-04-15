@@ -1,7 +1,7 @@
 /*
 
   Carnival_poof.cpp - Carnival library
-  Copyright 2016, 2017 Neil Verplank.  All right reserved.
+  Copyright 2016-2020 Neil Verplank.  All right reserved.
 
   Used to hold 1 or more pin+solenoid associations, and maintain state
   for each of those relays (which we are assuming is hooked up to a 
@@ -144,7 +144,13 @@ void Carnival_poof::startPoof() {
 
 
 
-/* set state to on for 1 or more solenoids */
+/* set state to on for 1 or more solenoids.
+   note that the incoming array is NOT the pins, but the "addresses" of the solenoids.  IOW, if there are three
+   solenoids in the allSolenoids array, they would be 1, 2, and 3 respectively.  So an array [1,3] would have a 
+   size 2, and would turn on the 1st and 3rd solenoids in the allSolenoids array.
+
+   We check each solenoid to make sure it hasn't exceeded pooflimit.
+ */
 void Carnival_poof::startPoof(int sols[], int size) {
 
     int new_poof = 0;
@@ -182,7 +188,9 @@ void Carnival_poof::stopPoof() {
 
 
 
-/* set state to off for 1 or more solenoids */
+/* set state to off for 1 or more solenoids. This array works like the one in startPoof above, see comments. 
+   same array rules apply as startPoof above.
+*/
 void Carnival_poof::stopPoof(int sols[], int size) {
 
     int new_stops = 0;
@@ -261,11 +269,13 @@ event_t *Carnival_poof::doPoof(char *incoming) {
         I.e., 100110001110 means 12th relay on, 11, 10 off, 9-8 on...
         relay 1 off.  Which is 2446 decimal.
 
+
+        NOTE - making relays 24, most that could be in two incoming binary bytes....
     */
     int num_relays = 0;
     int num_relays_off = 0;
     int tot_chars  = strlen(incoming);
-    int relays[tot_chars], relays_off[tot_chars];
+    int relays[24], relays_off[24];
     int binary;
 
     if (tot_chars > 2 and incoming[2]=='>') {
@@ -276,22 +286,30 @@ event_t *Carnival_poof::doPoof(char *incoming) {
     new_events = NULL;
 
     if (incoming[1] == '1') {          // p1, start / keep poofing ALL
+
         if (num_relays) 
             startPoof(relays, num_relays);
         else 
             startPoof(); 
+
     } else if (incoming[1] == '0') {   // p0, stop poofing ALL
+
         if (num_relays)
             stopPoof(relays, num_relays);
         else 
             stopPoof();
+
     } else if (incoming[1] == '2') {   // p2, poofstorm if allowed and still poofing
+
         if (pausePoofing[0] == 0) 
-            new_events = poofStorm();
-    } else if (binary) {
-        if (num_relays)
+            long int storm_length = poofStorm(new_events);
+
+    } else if (binary == 1) {
+
+        if (num_relays) 
             startPoof(relays, num_relays);
-        if (num_relays_off)
+
+        if (num_relays_off) 
             stopPoof(relays_off, num_relays_off);
     } 
 
@@ -309,7 +327,8 @@ void Carnival_poof::poofAll(boolean state) {
 
 
 
-/* set state for an array of poofers  */
+/* Actually do the poofing, turning solenoids on / off unless we've
+   been locally (with a switch) or remotely (via wireless) been killed.  */
 void Carnival_poof::poofAll(boolean state, int sols[], int size) {
 
     for (int y = 0; y < size; y++) {
@@ -319,7 +338,7 @@ void Carnival_poof::poofAll(boolean state, int sols[], int size) {
             if (!KILL_LOCAL && !KILL_REMOTE) {
                 digitalWrite(allSolenoids[sols[y]-1], RELAY_ON);
             } else {
-                debug.Msg("poofing killed....");
+                debug.Msg("poofing is currently killed....");
             }
         } else {
             digitalWrite(allSolenoids[sols[y]-1], RELAY_OFF);
@@ -329,7 +348,7 @@ void Carnival_poof::poofAll(boolean state, int sols[], int size) {
 
 
 /* find an array of relays if specified in string */
-int Carnival_poof::get_relays(char *incoming, int *relays, int *binary, int *relays_off, int *num_relays_off) {
+int Carnival_poof::get_relays(char *incoming, int relays[], int *binary, int relays_off[], int *num_relays_off) {
     /*
        string looks like: "p1>1,2,6,7"
        so we skip 3 characters, then find #'s between commas,
@@ -350,23 +369,26 @@ int Carnival_poof::get_relays(char *incoming, int *relays, int *binary, int *rel
     }
 
     while (cur_let < NUMLEN) {
-        int cur_num = 0;
+
+        int cur_num     = 0; // number of "on" relays.  could be a comma separated list
         int cur_off_num = 0;
-        int accum   = 0;
+        int accum       = 0;
+
         while (incoming[cur_let+cur_num] != ',' && cur_let+cur_num < NUMLEN) {
             accum = 10*accum;
             accum += (incoming[cur_num+cur_let]-0x30);
             cur_num++;
         }
 
-        if (binary) {
+        if (*binary == 1) {
+            cur_num = 0;    
             int count = solenoidCount;
             while (count > 0) {
 
                 int byte = pow(2,count-1);
                 if (accum >= byte) {
                     relays[cur_num] = count;
-                    accum = accum - byte;
+                    accum           = accum - byte;
                     cur_num++;
                 } else {
                     relays_off[cur_off_num] = count;
@@ -376,7 +398,7 @@ int Carnival_poof::get_relays(char *incoming, int *relays, int *binary, int *rel
             }
 
             *num_relays_off = cur_off_num;
-            num_relays     = cur_num;
+            num_relays      = cur_num;
             cur_let = NUMLEN;
 
         } else {
@@ -406,11 +428,12 @@ int Carnival_poof::get_relays(char *incoming, int *relays, int *binary, int *rel
 */
 
 /* Crazy Poofer display */
-event_t *Carnival_poof::poofStorm() {
+long int Carnival_poof::poofStorm(event_t *poofstorm) {
 
-    event_t *poofstorm, *new_event;
+    event_t *new_event;
 
     long curtime     = millis()+1;
+    long time_offset = 0L;
     int  short_delay = 50;
     int  delay_time  = 200;
     char *str;
@@ -419,61 +442,67 @@ event_t *Carnival_poof::poofStorm() {
 
     // all on
     str = "p1";
-    poofstorm  = events.new_event(str,curtime,0);
-    curtime += delay_time;
+    poofstorm    = events.new_event(str,time_offset,0,curtime);
+    time_offset += delay_time;
 
     // all off
     str = "p0";
-    new_event = events.new_event(str,curtime,0);
+    new_event = events.new_event(str,time_offset,0,curtime);
     poofstorm = events.concat_events(poofstorm,new_event);
+    time_offset += delay_time;
   
     // all on, left to right
-    new_event = poof_across(true, delay_time, &curtime, 1);
+    long length = poof_across(true, delay_time, curtime+time_offset, 1, new_event);
     poofstorm = events.concat_events(poofstorm,new_event);
-    curtime += delay_time;
+    time_offset += length;
+    time_offset += delay_time;
 
     // all off
     str = "p0";
-    new_event = events.new_event(str,curtime,0);
+    new_event = events.new_event(str,time_offset,0,curtime);
     poofstorm = events.concat_events(poofstorm,new_event);
+    time_offset += delay_time;
   
     // all on, right to left
-    new_event = poof_across(true, delay_time, &curtime, -1);
+    length = poof_across(true, delay_time, curtime+time_offset, -1, new_event);
     poofstorm = events.concat_events(poofstorm,new_event);
-    curtime += delay_time;
+    time_offset += length;
+    time_offset += delay_time;
 
     // all off
     str = "p0";
-    new_event = events.new_event(str,curtime,0);
+    new_event = events.new_event(str,time_offset,0,curtime);
     poofstorm = events.concat_events(poofstorm,new_event);
-    curtime += delay_time;
+    time_offset += delay_time;
   
 
     // all on 4 x delay, all off
     str = "p1";
-    new_event = events.new_event(str,curtime,0);
+    new_event = events.new_event(str,time_offset,0,curtime);
     poofstorm = events.concat_events(poofstorm,new_event);
-    curtime += 4*delay_time;
+    time_offset += 4*delay_time;
     str = "p0";
-    new_event = events.new_event(str,curtime,0);
+    new_event = events.new_event(str,time_offset,0,curtime);
     poofstorm = events.concat_events(poofstorm,new_event);
 
-    return poofstorm;
+    return time_offset;
 }
 
 
 
 /* poof right to left (or left to right) */
-event_t *Carnival_poof::poof_across(boolean state, int rate, long int *curtime, int dir) {
+long int Carnival_poof::poof_across(boolean state, int rate, long int curtime, int dir, event_t *poof_right) {
 
-    event_t *poof_right, *new_ev, *cur_ev;
-    poof_right = NULL;
+    event_t *new_event, *cur_ev;
     cur_ev     = NULL;
-    new_ev     = NULL;
+    new_event  = NULL;
+    long int time_offset = 0;
 
     int st   = 1;
     int y    = 1;
     int inc  = 1;
+
+    debug.Msg("POOF ACROSS");
 
     if (dir == -1) {
         y  = solenoidCount;
@@ -495,32 +524,32 @@ event_t *Carnival_poof::poof_across(boolean state, int rate, long int *curtime, 
             out[4] = (char)(ones+0x30);
         }
         out[5] = NULL;
-        new_ev = events.new_event(out,*curtime,0);
-        *curtime += rate;
+        new_event = events.new_event(out,time_offset,0,curtime);
+        time_offset += rate;
 
         if (!poof_right) {
-            poof_right = new_ev;
-            cur_ev = new_ev;
+            poof_right = new_event;
+            cur_ev = new_event;
         } else {
-            cur_ev->next = new_ev;
-            cur_ev = new_ev;
+            cur_ev->next = new_event;
+            cur_ev = new_event;
         }
         st++;
         y += inc;
     }
-    return poof_right;
+    return time_offset;
 }
 
 
 
 
 /*  several short blasts and a big poof */
-event_t *Carnival_poof::gunIt(long int *curtime){
+long int Carnival_poof::gunIt(long int curtime, event_t *gunit){
 
-    event_t *gunit, *new_ev, *cur_ev;
-    gunit   = NULL;
-    new_ev  = NULL;
-    cur_ev  = NULL;
+    event_t  *new_event, *cur_ev;
+    new_event  = NULL;
+    cur_ev     = NULL;
+    long int time_offset = 0;
 
     int  loops       = 4;   // the last poof is long
     int  short_delay = 50;
@@ -528,43 +557,45 @@ event_t *Carnival_poof::gunIt(long int *curtime){
     int  long_delay  = 1000;
     char *str;
 
+    debug.Msg("GUN IT!");
+
     for(int i = 0; i <= loops; i++){
         // all on
         str = "p1";
-        new_ev = events.new_event(str,*curtime,0);
+        new_event = events.new_event(str,time_offset,0,curtime);
         if (!cur_ev) {
-            cur_ev = new_ev;
-            gunit  = new_ev;
+            cur_ev = new_event;
+            gunit  = new_event;
         } else {
-            cur_ev->next = new_ev;
-            cur_ev       = new_ev;
+            cur_ev->next = new_event;
+            cur_ev       = new_event;
         }
         if (i==loops) 
-            *curtime += long_delay;
+            time_offset += long_delay;
         else
-            *curtime += delay_time;
+            time_offset += delay_time;
 
         // all off
         str = "p0";
-        new_ev = events.new_event(str,*curtime,0);
-        cur_ev->next = new_ev;
-        cur_ev       = new_ev;
-        *curtime += short_delay;
+        new_event = events.new_event(str,time_offset,0,curtime);
+        cur_ev->next = new_event;
+        cur_ev       = new_event;
+        time_offset += short_delay;
     }
 
-    return gunit;
+    return time_offset;
 }
 
 
 
 
 /* poof even (or odd) in sequential order */
-event_t *Carnival_poof::poof_alt(int rate, long int *curtime, int dir) { 
+long int Carnival_poof::poof_alt(int rate, long int curtime, int dir, event_t *poofs) { 
 
-    event_t *poofs, *new_ev, *cur_ev;
-    poofs   = NULL;
+    event_t *new_ev, *cur_ev;
     new_ev  = NULL;
     cur_ev  = NULL;
+    long int time_offset = 0;
   
     char *str;
     char  out[5] = {'p','0','>',0,0};
@@ -589,7 +620,7 @@ event_t *Carnival_poof::poof_alt(int rate, long int *curtime, int dir) {
                 out[4] = (char)(ones+0x30);
             }
             out[5] = NULL;
-            new_ev = events.new_event(out,*curtime,0);
+            new_ev = events.new_event(out,time_offset,0,curtime);
             if (!cur_ev) {
                 cur_ev = new_ev;
                 poofs  = new_ev;
@@ -597,51 +628,54 @@ event_t *Carnival_poof::poof_alt(int rate, long int *curtime, int dir) {
                 cur_ev->next = new_ev;
                 cur_ev       = new_ev;
             }
-            *curtime += rate;
+            time_offset+= rate;
    
             out[1] = '0';
-            new_ev = events.new_event(out,*curtime,0);
+            new_ev = events.new_event(out,time_offset,0,curtime);
             cur_ev->next = new_ev;
             cur_ev       = new_ev;
         }
     }
 
-    return poofs;
+    return time_offset;
 }
 
 
 
 
 /* start slow, go faster and faster */
-event_t *Carnival_poof::poofChooChoo(int start, int decrement, int rounds, long int *curtime){ 
+long int Carnival_poof::poofChooChoo(int start, int decrement, int rounds, long int curtime, event_t *poofs){ 
 
 // HEY!! START CAN GO TO 0 OR BELOW.......
 
-    event_t *poofs, *new_ev;;
-    poofs  = NULL;
-    new_ev = NULL;
+    event_t *new_event;
+    new_event = NULL;
     char *str;
     int init = start;
 
+    long int time_offset = 0;
+
+    debug.Msg("Poof Choo Choo!");
+
     for (int i = 0; i <= rounds; i++) {
-        new_ev = Carnival_poof::poof_alt(start, curtime, -1);
-        poofs  = events.concat_events(poofs,new_ev);
+        time_offset += Carnival_poof::poof_alt(start, curtime+time_offset, -1,new_event);
+        poofs  = events.concat_events(poofs,new_event);
         if (start > decrement) // sanity check
             start -= decrement;
-        new_ev = Carnival_poof::poof_alt(start, curtime, 1);
-        poofs  = events.concat_events(poofs,new_ev);
+        time_offset += Carnival_poof::poof_alt(start, curtime+time_offset, 1,new_event);
+        poofs  = events.concat_events(poofs,new_event);
         if (start > decrement)
            start -= decrement;
     }
-    *curtime += start;
+    time_offset += start;
     str = "p1";
-    new_ev = events.new_event(str,*curtime,0);
-    poofs  = events.concat_events(poofs,new_ev);
-    *curtime += init;
+    new_event = events.new_event(str,time_offset,0, curtime);
+    poofs  = events.concat_events(poofs,new_event);
+    time_offset += init;
     str = "p0";
-    new_ev = events.new_event(str,*curtime,0);
-    poofs  = events.concat_events(poofs,new_ev);
+    new_event = events.new_event(str,time_offset,0, curtime);
+    poofs  = events.concat_events(poofs,new_event);
 
-    return poofs;
+    return time_offset;
 }
 

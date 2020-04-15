@@ -1,6 +1,6 @@
 /*
   Carnival_events.h - Carnival library 
-  Copyright Dec 2017 Neil Verplank.  All right reserved.
+  Copyright Dec 2017-2020 Neil Verplank.  All right reserved.
 */
 
 // ensure this library description is only included once
@@ -16,6 +16,7 @@
 
 #include "WString.h"
 
+// list of events
 typedef struct _event_t_ {
     char   *action;                     // type of event (e.g. "poof")
     long    begin;                      // relative time from 0 to begin
@@ -23,6 +24,12 @@ typedef struct _event_t_ {
     int     started;                    // 1 if begun
     struct _event_t_ *next;             // next event on a list
 } event_t;
+
+// list of messages
+typedef struct _msg_t_ {
+    char   *msg;                      
+    struct _msg_t_ *next;            
+} msg_t;
 
 
 // library interface description
@@ -32,12 +39,15 @@ class Carnival_events
   public:
     Carnival_events();
 
-    event_t *new_event(char *str, long begin, int length);
-    event_t *check_events(event_t *events, long seq_start, char **msg);
-    event_t *concat_events(event_t *first_event, event_t *second_event);
-    event_t *parse_events(char *str);
-    void     free_event_list(event_t *head);
-    void     free_event(event_t *event);
+    event_t  *new_event(char *str, long begin, int length, long seq_start);
+    int       check_events(event_t *events, msg_t **new_msgs);
+    event_t  *concat_events(event_t *first_event, event_t *second_event);
+    event_t  *parse_events(char *str);
+    void      free_event_list(event_t *head);
+    void      free_event(event_t *event);
+    msg_t    *concat_msgs(msg_t *first_msg, msg_t *second_msg);
+    void      free_msg_list(msg_t *head);
+    void      free_msg(msg_t *msg);
 
 //  private:
 };

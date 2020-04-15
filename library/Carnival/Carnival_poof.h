@@ -1,6 +1,6 @@
 /*
   Carnival_poof.h - Carnival library 
-  Copyright 2016 Neil Verplank.  All right reserved.
+  Copyright 2016-2020 Neil Verplank.  All right reserved.
 */
 
 // ensure this library description is only included once
@@ -45,11 +45,11 @@ class Carnival_poof
     boolean isPoofing(int whichSolenoid);
 
     // timed sequences
-    event_t *poofStorm();  
-    event_t *poof_across(boolean state, int rate, long int *st_time, int dir);  
-    event_t *gunIt(long int *st_time); 
-    event_t *poof_alt(int rate, long int *st_time, int dir);
-    event_t *poofChooChoo(int start, int decrement, int rounds, long int *st_time); 
+    long int poofStorm(event_t *new_events);  
+    long int poof_across(boolean state, int rate, long int st_time, int dir, event_t *new_events);  
+    long int gunIt(long int st_time, event_t *new_events); 
+    long int poof_alt(int rate, long int st_time, int dir, event_t *new_event);
+    long int poofChooChoo(int start, int decrement, int rounds, long int st_time, event_t *new_event); 
 
   private:
     int get_relays(char *str, int *relays, int *binary, int *relays_off, int *num_relays_off);

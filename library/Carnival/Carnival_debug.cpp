@@ -44,7 +44,7 @@ void Carnival_debug::start(int debugValue, int sSpeed) {
   MY_SPEED = sSpeed;
   if (MY_DEBUG && MY_SPEED) { 
       Serial.begin(MY_SPEED); 
-      Msg("Debugging on!");
+      Msg("\nDebugging on!");
   }
 }
 

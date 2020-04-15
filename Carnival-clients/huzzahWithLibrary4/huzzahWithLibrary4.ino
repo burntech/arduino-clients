@@ -2,7 +2,7 @@
 
     ESP XC-Client
 
-    Copyright 2016, 2017, 2018 - Neil Verplank (neil@capnnemosflamingcarnival.org)
+    Copyright 2016, 2017, 2018, 2019 - Neil Verplank (neil@capnnemosflamingcarnival.org)
 
     This file is part of The Carnival.  See README.md for more detail.
 
@@ -42,11 +42,11 @@
 
 */
 
-#define       WHOAMI           "BIGBETTY"  // which effect am I? (B=The Button, ORGAN, LULU, CAMERA - can be any string)
+#define       WHOAMI           "LOKI"   // which effect am I? (B=The Button, ORGAN, LULU, CAMERA - can be any string)
 
 const int     DEBUG            = 1;        // 1 to turn serial on and print useful (ha!) messages
 
-#define       ESP8266                      // comment out if using an ESP32 of any kind
+//#define       ESP8266                      // comment out if using an ESP32 of any kind
 
 #ifndef ESP8266
   #define       ESP32                      // comment out 8266 above to use Adafruit-style ESP32
@@ -85,15 +85,15 @@ const int     DEBUG            = 1;        // 1 to turn serial on and print usef
  
 
 #ifdef ESP8266 // Adafruit Huzzah ESP8266 and similar, possibly NodeMCU
-      int       killSwitch       = 0;              // should be 4 - kill switch
-      int       inputButtons[]   = {5};            // should be 5 - poof button(s) 
-      int       mySolenoids[]    = {12,13};  // 12,13,14,16 - poofer relay(s)
+//      int       killSwitch       = 0;            // could be 0 or 4 on the 8266 - define if there is a kill switch
+      int       inputButtons[]   = {};             // 5 on the 8266 Feather, = D1 on the Entryway.  First one is poof button 
+      int       mySolenoids[]    = {12};        // 12,13, 14 on the 8266 = D6, D7 on the Wemos.  These are poofer relay(s)
       int       allAnalog[]      = {};             // A0 - don't set if nothing on the pin
 #else
   #ifdef ESP32
     #ifdef SPARKFUN
       int       killSwitch       = 15;
-      int       inputButtons[]   = {4};
+      int       inputButtons[]   = {}; // 4?
       int       mySolenoids[]    = {32,33,25,26,27,14,17,16,18,23,19,22};
       int       allAnalog[]      = {};             // 36...39 - don't set if nothing on the pin
     #else // Adafruit Huzzah ESP32, possibly others
@@ -109,7 +109,7 @@ const int     DEBUG            = 1;        // 1 to turn serial on and print usef
 
 
 
-//////////////// IN THEORY MARGE, YOU CAN IGNORE THE REST OF THIS CODE FOR NOW....
+//////////////// IN THEORY, YOU CAN IGNORE THE REST OF THIS CODE FOR NOW....
 
 /* 
  *  If you're creating a wireless poofer, using (say) a NodeMCU or an 
@@ -126,7 +126,6 @@ const int     DEBUG            = 1;        // 1 to turn serial on and print usef
 /* Probably don't need to change */
 
 #define       SERIAL_SPEED     115200      // active if debugging
-#define       DEBOUNCE         35          // minimum milliseconds between button state change
 
 
 /* Constants, State-arrays, Flags */
@@ -156,6 +155,7 @@ int           KILL_SWITCH           = 0;   // local kill-state
 #include      <Carnival_leds.h>            // onboard LED library
 #include      <Carnival_debug.h>           // debug messages library
 #include      <Carnival_events.h>          // timed sequences
+#include      <Carnival_analog.h>          // timed sequences
 #ifdef POOFS
   #include    <Carnival_poof.h>            // poofer library
 #endif
@@ -164,48 +164,51 @@ Carnival_debug     debug     = Carnival_debug();
 Carnival_network   network   = Carnival_network();
 Carnival_leds      leds      = Carnival_leds();     // display leds (red is poofing. on 8266, blue is networking)
 Carnival_events    events    = Carnival_events();
+Carnival_analog    analog    = Carnival_analog();
 #ifdef POOFS
   Carnival_poof    pooflib   = Carnival_poof();
 #endif
 
 
-event_t        *my_events = NULL;           // struct for holding the current timed sequence
-long           seq_start  = 0L;             // start time for timed sequence
-
-
-
+event_t           *my_events             = NULL;         // struct for holding all pending timed sequences
 
 
 void setup() {
 
+    // turn on debugging and output if DEBUG==1 above
     debug.start(DEBUG, SERIAL_SPEED);
 
+    // set up solenoids if any
     #ifdef POOFS
         pooflib.setSolenoids(mySolenoids, numSolenoids);
     #endif
+
+    // set up onboard leds (red is poof, blue is network, board dependent)
     #ifdef SPARKFUN
         leds.startLEDS(5,-1);
     #else
         leds.startLEDS();
     #endif
-    initButtons();
-    initAnalog();
 
-    
+    // set up buttons, if any.  First button is poof button, and 
+    // when re-starting while button held, go into network override mode.
+    // force that here by initButtons(button_count,1)
+    analog.initButtons(button_count);
+    analog.initAnalog(adc_count);
+
+    // initialize and start network connection
     network.start(WHOAMI, DEBUG);
-    network.connectWifi();
-    network.confirmConnect();
     
     /*  
-       good place to send control messages, eg:
+       Control messages (sent immediately, then re-broadcast with keep alive and reconnect)
  
-         network.callServer(WHOAMI,"*:DS:1");                // set the don't_send flag (good for buttons and such)
-         network.callServer(WHOAMI,"*:CC:EFFECT1,EFFECT2");  // set my broadcast collection to EFFECT1 and EFFECT2         
+         network.addSetting("*:DS:1");                // set the don't_send flag (good for buttons and such)
+         network.addSetting("*:CC:EFFECT1,EFFECT2");  // set my broadcast collection to EFFECT1 and EFFECT2         
     */
 
 #ifdef DNS
-     // turn off incoming messages
-     network.callServer(WHOAMI,"*:DS:1");
+     // turns off incoming messages
+     network.addSetting("*:DS:1");
 #endif
 
 }
@@ -223,23 +226,24 @@ void loop() {
 
     network.confirmConnect();         // confirm wireless connection, socket connection
     leds.checkBlue();                 // check/update led status (non-blocking)
-    checkButtons();                   // check/update button(s) state(s)
-    readAnalog();                     // check readings on analog pins
+    analog.checkButtons();            // check/update button(s) state(s)
+    analog.readAnalog();              // check readings on analog pins
 
-    char* msg = network.readMsg();    // read any incoming wireless messages
+    
 
-    if (msg==NULL || strlen(msg)==0)
-        // if no wireless messages, check for any timed events
-        my_events = events.check_events(my_events, seq_start, &msg);
-     
-    if (msg && strlen(msg)>0) {
-        // process any incoming messages or timed events (free event list if message is "kill")
-        my_events = processMsg(msg, my_events);
-        debug.Msg(msg);
+
+    /*
+     * Read and process any incoming wireless messages, as well as any queued 
+     * events ready to begin.  Process all messages for system messages
+     * (eg poof, kill, keep alive, control settings).  Ultimately returns
+     * a linked list of non-system messages that came in or came current.
+     */
+    msg_t  *new_msgs   = NULL;
+    if(network.processIncoming(&new_msgs, &my_events)) {    
+        doMsgs(new_msgs);                // process any new non-system messages
     }
 
-    my_events = checkKill(my_events); // check kill switch / kill state, clean events if needed
-
+    
     #ifdef POOFS
       pooflib.checkPoofing();         // check/update poofing state(s)
     #endif
@@ -250,205 +254,35 @@ void loop() {
 
 
 
-void initButtons() {
-    initButtons(0);
-}
 
+/*
+ * Iterate through all non system messages, free any memory allocated to messages
+ */
+void doMsgs(msg_t *my_msgs) {
 
+    msg_t  *new_msg;
 
-/* initialize any button pins and button states */
-void initButtons(boolean wireless_override) {
+    for (new_msg = my_msgs; new_msg != NULL; new_msg = new_msg->next) {
 
-    if (killSwitch) {
-        pinMode(killSwitch, INPUT_PULLUP);  // connect internal pull-up
-        digitalWrite(killSwitch, HIGH); 
-    }
-    for (int x = 0; x < button_count; x++) {
-        pinMode(inputButtons[x], INPUT_PULLUP);
-        button_state[x] = false;       
-        if (x==0)
-            if (wireless_override)
-                network.check_override(LOW);
-            else
-                network.check_override(digitalRead(inputButtons[0]));
-        // now turn off button state
-        digitalWrite(inputButtons[x], HIGH); 
-    
-    }   
-}
+        // This is where you would do something meaningful with an incoming line
+        // new_msg->msg contains an incoming string
 
+        //debug.MsgPart("DoMsg:");
+        //debug.Msg(new_msg->msg);
 
-
-
-/* Initialize any Analog pins and set current readings */
-void initAnalog() {
-
-#ifdef ESP32
-// not sure if we need to do this, or if using the Arduino IDE, 
-// this is set by default?
-    analogReadResolution(12);        // 12 bits of precision
-    analogSetAttenuation(ADC_11db);  // Use 3.3 V For all pins
-#endif
-    for (int x = 0; x < adc_count; x++) {
-        pinMode(allAnalog[x], INPUT);
-        adc_reading[x] = 0;
-    }  
-}
-
-
-
-/* do something with an incoming message */
-event_t *processMsg(char *incoming, event_t *my_events) {
-
-    event_t *new_events;
-    new_events = NULL;
-    
-    if (strcmp(incoming, "kill") == 0) {        
-      // external kill signal, set flag, stop poofing
-      #ifdef POOFS
-        pooflib.set_kill_remote(1);
-        pooflib.stopPoof();
-      #endif
-
-      // nullify any timed events, since we're killed
-      events.free_event_list(my_events);
-      my_events = NULL;
-
-    } else if (strcmp(incoming, "free") == 0) {
-      #ifdef POOFS
-        pooflib.set_kill_remote(0);
-      #endif
-    } else if (incoming[0] == 'p') {
-      #ifdef POOFS
-        new_events = pooflib.doPoof(incoming);
-      #endif
-    } else {
-      // else some other message.....
     }
 
-    if (my_events || new_events)
-        my_events = events.concat_events(my_events,new_events);
+    if (my_msgs)
+        events.free_msg_list(my_msgs);  // free up memory from msg list
 
-    return my_events;
-}
-
-
-
-
-/*  
- *   update state of onboard button(s), send state to server, do something (like poof).  
- *   returns non-zero if any button just pushed.
-*/
-int checkButtons() {
-
-    boolean button_value;
-    long now        = millis();
-    int  somebutton = 0;
-    
-    // allow push if we have button, and are connected (or WIFI_OVERRIDE)
-    if (button_count && network.OK()) {  
-        for (int x = 0; x < button_count; x++) {
-            int     button_number    = x+1;
-            button_value = digitalRead(inputButtons[x]);
-
-            // if button *just* pushed (first detection since last state change)
-            if (button_value == LOW) {
-                if (!button_state[x] && ((now - lastButsChgd[x]) > DEBOUNCE)) {
-                    button_state[x] = true;
-                    somebutton      = button_number;
-                    lastButsChgd[x] = now;
-                  #ifdef POOFS
-                    if (x==0)
-                      pooflib.startPoof();
-                  #endif
-                    network.callServer(button_number,1);
-                }
-            } else {
-                // if button *just* released...
-                if (button_state[x] && ((now - lastButsChgd[x]) > DEBOUNCE)) {
-                    button_state[x] = false;
-                    lastButsChgd[x] = now;
-                  #ifdef POOFS
-                    if (x==0)
-                      pooflib.stopPoof();
-                  #endif
-                    network.callServer(button_number,0);
-                }
-            }
-        }
-    }
-
-    return somebutton;
-}
-
-
-
-
-/* check kill button and kill state */
-event_t *checkKill(event_t *my_events) {
-        
-    if (killSwitch) {  // if there's a local kill switch, check it.      
-        int button_value = digitalRead(killSwitch);
-        if (button_value == LOW && !KILL_SWITCH) {         // state wrong, button *just* pressed
-            KILL_SWITCH = 1;
-            network.callServer(WHOAMI,"kill::");
-        } else if (button_value == HIGH && KILL_SWITCH) {  // state wrong, button *just* released
-            KILL_SWITCH = 0;
-            network.callServer(WHOAMI,"free::");
-        }
-    }
-
-  #ifdef POOFS
-    int k_state = pooflib.get_kill();
-    if (k_state != KILL_SWITCH) {
-        if (KILL_SWITCH) {  // just killed, locally
-            pooflib.stopPoof();
-            pooflib.set_kill(1);
-        } else {
-            pooflib.set_kill(0);
-        }
-    }
-  #endif
-
-    if (KILL_SWITCH && my_events != NULL) {
-        events.free_event_list(my_events);
-        my_events = NULL;
-    }
-
-    return my_events;
-}
-
-
-/* get current readings for anything connected to an Analog pin.  */
-void readAnalog() { 
-
-    int reading;
-    for (int x = 0; x < adc_count; x++) {
-        reading = analogRead(allAnalog[x]);
-        if (reading != adc_reading[x]) {
-           debug.MsgPart("Threshold reading: ");
-           debug.MsgPart(reading);
-           debug.MsgPart("  ");
-           debug.Msg(allAnalog[x]);           
-           adc_reading[x] = reading;
-        }
-    }
 }
 
 
 
 
 
-/* required, at least on some installations, to eliminate "impure_ptr" compilation error for ESP 32 DEV board */
-#ifdef ESP32
 
-void *operator new(size_t size)       {  return malloc(size);  }
-void *operator new[](size_t size)     {  return malloc(size);  }
-void  operator delete(void * ptr)     {  free(ptr);  }
-void  operator delete[](void * ptr)   {  free(ptr);  }
-extern "C" void __cxa_pure_virtual    (void) __attribute__ ((__noreturn__));
-extern "C" void __cxa_deleted_virtual (void) __attribute__ ((__noreturn__));
-void __cxa_pure_virtual(void)         {  abort(); }
-void __cxa_deleted_virtual(void)      {  abort(); }
 
-#endif
+
+
+
