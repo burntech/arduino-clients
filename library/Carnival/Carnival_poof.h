@@ -52,7 +52,7 @@ class Carnival_poof
     long int poofChooChoo(int start, int decrement, int rounds, long int st_time, event_t *new_event); 
 
   private:
-    int get_relays(char *str, int *relays, int *binary, int *relays_off, int *num_relays_off);
+    int get_relays(char *str, int *relays, int *binary, int *relays_off, int *num_relays_off, long *event_time);
 };
 
 #endif

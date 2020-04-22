@@ -51,7 +51,7 @@ Carnival_events::Carnival_events()
 /* EVENT ROUTINES  */
 
 /*     create a new single-event list  */
-event_t *Carnival_events::new_event(char *str, long begin, int length, long seq_start) {
+event_t *Carnival_events::new_event(char *str, long begin, long length, long seq_start) {
 
     event_t *new_event;
 
@@ -72,30 +72,43 @@ event_t *Carnival_events::new_event(char *str, long begin, int length, long seq_
 
 
 /* check all events in the current timed sequence */
-int Carnival_events::check_events(event_t *events, msg_t **new_msgs) {
+event_t *Carnival_events::check_events(int *msgs_found, event_t *events, msg_t **new_msgs) {
 
-    int msgs_found = 0;
+    if (events == NULL) return NULL;
 
-    if (events == NULL) return msgs_found;
+    // return the head of the events list, or NULL if the list is empty....
 
-    long     now = millis();
+    event_t *head;
+    head             = events;
+
+
+    long     now     = millis();
 
     event_t *this_event, *last_event, *drop_event;
 
     this_event = events;
     last_event = NULL;
-    drop_event = NULL;
+
+    // go through all events, check each
 
     while (this_event!= NULL) {
 
+        drop_event = NULL;
+
+
         if ( now >= (this_event->begin) && !this_event->started ) {
+        
+           // event is beginning
 
             // process the timed event
             msg_t   *new_msg    = NULL;
             event_t *new_events = NULL;
 
             // check for system messages
-            msgs_found = network.processMsg(this_event->action,&new_msg,&new_events);
+            *msgs_found = network.processMsg(this_event->action,&new_msg,&new_events);
+
+            if (new_events)  // unlikely, but....
+                events = concat_events(events,new_events);
 
             // check for non system messags
             if (msgs_found) 
@@ -109,7 +122,8 @@ int Carnival_events::check_events(event_t *events, msg_t **new_msgs) {
                 drop_event = this_event;
 
         } else if ( now >= (this_event->begin + this_event->length) ) {
-            // complete action
+
+            // event is ending - complete action
 
 // JUST GOING TO NOTE WE ACTUALLY DO NOTHING AT COMPLETION OF LENGTH 
 // (and instead seem to just set a start and a finish action at different timmes....
@@ -122,13 +136,20 @@ int Carnival_events::check_events(event_t *events, msg_t **new_msgs) {
         if (drop_event != NULL) {  // dropping event we're pointing to
 
             // cut completed events from the list if in the middle of the list
-            if (last_event != NULL) {
+            if (last_event != NULL && this_event!= NULL) {
                 // drop this event from the list
                 last_event->next = this_event->next;
             } 
 
             // move current pointer
             this_event = this_event->next;
+
+            if (drop_event == head) {
+                if (head->next)
+                    head = head->next;
+                else
+                    head = NULL;
+            }
 
             // and free up memory
             free_event(drop_event);
@@ -139,9 +160,14 @@ int Carnival_events::check_events(event_t *events, msg_t **new_msgs) {
         }
     }
 
+
     // returns an ever smaller list, eventually null
-    return msgs_found;
-}
+    return head;
+
+} // end check_events
+
+
+
 
 
 /*
@@ -162,6 +188,8 @@ event_t *Carnival_events::concat_events(event_t *first_event, event_t *second_ev
 
     return first_event;
 }
+
+
 
 
 

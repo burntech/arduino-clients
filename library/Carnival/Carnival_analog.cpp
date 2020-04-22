@@ -14,18 +14,22 @@
 #include <Carnival_debug.h>
 #include <Carnival_analog.h>
 #include <Carnival_network.h>
+#include <Carnival_poof.h>            // poofer library
 
 #define       DEBOUNCE         35          // minimum milliseconds between button state change
 
 
 extern   Carnival_debug   debug;
 extern   Carnival_network network;
+extern   Carnival_poof    pooflib;
+
 extern   int killSwitch; 
 extern   int allAnalog[];
 extern   int inputButtons[];
 extern   int button_state[];
 extern   int adc_reading[];
 extern   int lastButsChgd[];
+extern   int POOFING_ALLOWED;
 
 
 int adc_count; 
@@ -53,12 +57,10 @@ void Carnival_analog::initButtons(int count) {
 /* initialize any button pins and button states */
 void Carnival_analog::initButtons(int count, boolean wireless_override) {
 
-  #ifdef killSwitch
     if (killSwitch) {
         pinMode(killSwitch, INPUT_PULLUP);  // connect internal pull-up
         digitalWrite(killSwitch, HIGH); 
     }
-  #endif
 
     button_count = count;
  
@@ -120,10 +122,8 @@ int Carnival_analog::checkButtons() {
                     button_state[x] = true;
                     somebutton      = button_number;
                     lastButsChgd[x] = now;
-                  #ifdef POOFS
-                    if (x==0)
-                    pooflib.startPoof();
-                  #endif
+                    if (POOFING_ALLOWED && x==0) 
+                        pooflib.startPoof();
                     network.callServer(button_number,1);
                 }
             } else {
@@ -131,10 +131,8 @@ int Carnival_analog::checkButtons() {
                 if (button_state[x] && ((now - lastButsChgd[x]) > DEBOUNCE)) {
                     button_state[x] = false;
                     lastButsChgd[x] = now;
-                  #ifdef POOFS
-                    if (x==0)
-                      pooflib.stopPoof();
-                  #endif
+                    if (POOFING_ALLOWED && x==0) 
+                        pooflib.stopPoof();
                     network.callServer(button_number,0);
                 }
             }
@@ -154,17 +152,4 @@ void Carnival_analog::readAnalog() {
 }
 
 
-
-
-char *int2str (int num) {
-
-    int NUMLEN = 2; // at least one digit plus null
-    if (num)
-        NUMLEN = (int)((ceil(log10(num))+1)*sizeof(char));
-    char* out        = (char*)malloc(NUMLEN);
-   
-    itoa(num, out, 10);
-    
-    return out;
-}
 

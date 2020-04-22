@@ -39,8 +39,8 @@ class Carnival_events
   public:
     Carnival_events();
 
-    event_t  *new_event(char *str, long begin, int length, long seq_start);
-    int       check_events(event_t *events, msg_t **new_msgs);
+    event_t  *new_event(char *str, long begin, long length, long seq_start);
+    event_t  *check_events(int *msgs_found, event_t *events, msg_t **new_msgs);
     event_t  *concat_events(event_t *first_event, event_t *second_event);
     event_t  *parse_events(char *str);
     void      free_event_list(event_t *head);
